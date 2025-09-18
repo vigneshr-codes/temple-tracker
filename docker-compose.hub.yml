@@ -21,7 +21,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      MONGO_URI: mongodb://admin:change_this_password_123@mongodb:27017/templetracker?authSource=admin
+      MONGODB_URI: mongodb://admin:change_this_password_123@mongodb:27017/templetracker?authSource=admin
       JWT_SECRET: change_this_jwt_secret_to_something_secure_32_chars_min
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30

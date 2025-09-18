@@ -89,7 +89,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      MONGO_URI: mongodb://admin:${MONGO_PASSWORD}@mongodb:27017/templetracker?authSource=admin
+      MONGODB_URI: mongodb://admin:${MONGO_PASSWORD}@mongodb:27017/templetracker?authSource=admin
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30

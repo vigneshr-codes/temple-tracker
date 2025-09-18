@@ -35,7 +35,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      MONGO_URI: mongodb://admin:your_secure_password@mongodb:27017/templetracker?authSource=admin
+      MONGODB_URI: mongodb://admin:your_secure_password@mongodb:27017/templetracker?authSource=admin
       JWT_SECRET: your_jwt_secret_here_min_32_chars
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30
@@ -91,7 +91,7 @@ docker run -d \
   --network temple-network \
   -p 3001:3001 \
   -e NODE_ENV=production \
-  -e MONGO_URI=mongodb://admin:your_secure_password@temple-mongodb:27017/templetracker?authSource=admin \
+  -e MONGODB_URI=mongodb://admin:your_secure_password@temple-mongodb:27017/templetracker?authSource=admin \
   -e JWT_SECRET=your_jwt_secret_here_min_32_chars \
   vigneshr2011/temple-tracker-backend:latest
 
@@ -107,7 +107,7 @@ docker run -d \
 
 ```bash
 docker run -d -p 3001:3001 \
-  -e MONGO_URI=your_mongodb_connection_string \
+  -e MONGODB_URI=your_mongodb_connection_string \
   -e JWT_SECRET=your_jwt_secret \
   vigneshr2011/temple-tracker-backend:latest
 ```
@@ -148,7 +148,7 @@ az container create \
   --image vigneshr2011/temple-tracker-backend:latest \
   --ports 3001 \
   --environment-variables \
-    MONGO_URI=your_connection_string \
+    MONGODB_URI=your_connection_string \
     JWT_SECRET=your_secret
 ```
 
@@ -170,7 +170,7 @@ fly launch --image vigneshr2011/temple-tracker-frontend:latest
 ```env
 NODE_ENV=production
 PORT=3001
-MONGO_URI=mongodb://username:password@host:27017/templetracker
+MONGODB_URI=mongodb://username:password@host:27017/templetracker
 JWT_SECRET=your_jwt_secret_at_least_32_characters_long
 JWT_EXPIRE=30d
 JWT_COOKIE_EXPIRE=30
