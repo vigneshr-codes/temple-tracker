@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: temple-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: change_this_password_123
+      MONGO_INITDB_DATABASE: templetracker
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - temple-network
+
+  backend:
+    image: vigneshr2011/temple-tracker-backend:latest
+    container_name: temple-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGO_URI: mongodb://admin:change_this_password_123@mongodb:27017/templetracker?authSource=admin
+      JWT_SECRET: change_this_jwt_secret_to_something_secure_32_chars_min
+      JWT_EXPIRE: 30d
+      JWT_COOKIE_EXPIRE: 30
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+    networks:
+      - temple-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: vigneshr2011/temple-tracker-frontend:latest
+    container_name: temple-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - temple-network
+
+networks:
+  temple-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
