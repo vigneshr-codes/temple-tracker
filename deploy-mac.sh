@@ -81,6 +81,12 @@ services:
       - mongodb_data:/data/db
     networks:
       - temple-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   backend:
     image: vigneshr2011/temple-tracker-backend:latest
@@ -97,7 +103,8 @@ services:
     ports:
       - "3001:3001"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - temple-network
     healthcheck:
