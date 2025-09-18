@@ -93,6 +93,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30
+      FRONTEND_URL: http://localhost
     ports:
       - "3001:3001"
     depends_on:

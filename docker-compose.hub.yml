@@ -25,6 +25,7 @@ services:
       JWT_SECRET: change_this_jwt_secret_to_something_secure_32_chars_min
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30
+      FRONTEND_URL: http://localhost
     ports:
       - "3001:3001"
     depends_on:
