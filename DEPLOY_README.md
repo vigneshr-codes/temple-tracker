@@ -4,8 +4,7 @@ Deploy Temple Tracker on any system using Docker images from Docker Hub.
 
 ## ⚡ One-Click Deployment (Recommended)
 
-Download and run the automated deployment script:
-
+### For Linux/Ubuntu/CentOS Servers:
 ```bash
 # Download the script
 curl -O https://raw.githubusercontent.com/vigneshr-codes/temple-tracker/main/deploy-anywhere.sh
@@ -16,6 +15,20 @@ chmod +x deploy-anywhere.sh
 # Run deployment
 ./deploy-anywhere.sh
 ```
+
+### For macOS (requires Docker Desktop):
+```bash
+# Download the Mac script
+curl -O https://raw.githubusercontent.com/vigneshr-codes/temple-tracker/main/deploy-mac.sh
+
+# Make it executable
+chmod +x deploy-mac.sh
+
+# Run deployment
+./deploy-mac.sh
+```
+
+**Note:** On macOS, you need Docker Desktop installed first. The script will guide you if it's not installed.
 
 This will:
 - ✅ Install Docker & Docker Compose (if needed)
