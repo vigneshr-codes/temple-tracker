@@ -1,6 +1,26 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Dynamic API URL based on current host
+const getApiUrl = () => {
+  // In development, use environment variable
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In production, construct API URL based on current location
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  
+  // If frontend is on port 80/443 (production), backend is on 3001
+  if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
+    return `${protocol}//${hostname}:3001/api`;
+  }
+  
+  // Default fallback
+  return 'http://localhost:3001/api';
+};
+
+const API_URL = getApiUrl();
 
 // Create axios instance
 const api = axios.create({
