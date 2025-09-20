@@ -9,18 +9,19 @@ const createAdminUser = async () => {
     
     console.log('🌱 Starting admin user seeding...');
 
-    // Check if admin user already exists
-    const existingAdmin = await User.findOne({ 
+    // Force delete any existing admin users to ensure clean state
+    const deleteResult = await User.deleteMany({ 
       $or: [
         { email: 'admin@gmail.com' },
         { username: 'admin' }
       ]
     });
-
-    if (existingAdmin) {
-      console.log('✅ Admin user already exists:', existingAdmin.email);
-      return existingAdmin;
+    
+    if (deleteResult.deletedCount > 0) {
+      console.log('🗑️ Deleted', deleteResult.deletedCount, 'existing admin user(s)');
     }
+
+    console.log('📝 Creating fresh admin user...');
 
     // Create admin user
     const adminUser = new User({
