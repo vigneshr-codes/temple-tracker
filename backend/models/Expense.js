@@ -50,6 +50,17 @@ const expenseSchema = new mongoose.Schema({
     default: 'general',
   },
   customEvent: String,
+  // NEW: Link to specific created events
+  specificEvent: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Event',
+    default: null,
+  },
+  eventLinkStatus: {
+    type: String,
+    enum: ['general', 'linked-active', 'linked-completed', 'linked-cancelled'],
+    default: 'general',
+  },
   linkedInventory: [{
     inventoryId: {
       type: mongoose.Schema.ObjectId,

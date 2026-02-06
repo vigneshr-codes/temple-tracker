@@ -145,7 +145,7 @@ fundSchema.methods.addFunds = function(method, amount, source, sourceId, perform
   transaction.balanceAfter = {
     cash: this.balance.cash,
     upi: this.balance.upi,
-    total: this.balance.total
+    total: this.balance.cash + this.balance.upi
   };
 
   this.transactions.push(transaction);
@@ -183,7 +183,7 @@ fundSchema.methods.deductFunds = function(method, amount, source, sourceId, perf
   transaction.balanceAfter = {
     cash: this.balance.cash,
     upi: this.balance.upi,
-    total: this.balance.total
+    total: this.balance.cash + this.balance.upi
   };
 
   this.transactions.push(transaction);

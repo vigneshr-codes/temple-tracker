@@ -62,9 +62,32 @@ const createDonation = async (req, res, next) => {
       }));
     }
 
+    // Handle event linking logic
+    let eventLinkStatus = 'general';
+    if (normalizedBody.specificEvent) {
+      const Event = require('../models/Event');
+      const event = await Event.findById(normalizedBody.specificEvent);
+      
+      if (event) {
+        // Determine link status based on event status and date
+        const now = new Date();
+        if (event.date < now && event.status === 'completed') {
+          eventLinkStatus = 'linked-completed';
+        } else if (event.status === 'cancelled') {
+          eventLinkStatus = 'linked-cancelled';
+        } else {
+          eventLinkStatus = 'linked-active';
+        }
+      } else {
+        // Invalid event ID, remove the link
+        delete normalizedBody.specificEvent;
+      }
+    }
+
     const donationData = {
       ...normalizedBody,
-      receivedBy: req.user._id
+      receivedBy: req.user._id,
+      eventLinkStatus
     };
 
     const donation = await Donation.create(donationData);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { addNotification } from '../../features/ui/uiSlice';
+import { getEvents } from '../../features/events/eventSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
 import {
   PlusIcon,
@@ -25,8 +26,10 @@ import {
 const AddExpenseModal = ({ onClose, onSuccess }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { events } = useSelector((state) => state.events);
   const [loading, setLoading] = useState(false);
   const [availableFunds, setAvailableFunds] = useState([]);
+  const [fundsSummary, setFundsSummary] = useState({ totalBalances: { cash: 0, upi: 0, total: 0 } });
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
@@ -38,6 +41,8 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
     },
     event: 'general',
     customEvent: '',
+    specificEvent: '',
+    eventSelectionType: 'general', // 'general' or 'specific'
     bills: [],
     notes: '',
     billDate: new Date().toISOString().split('T')[0], // Current date as default
@@ -98,6 +103,9 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
       const data = await response.json();
       if (data.success) {
         setAvailableFunds(data.data);
+        if (data.summary) {
+          setFundsSummary(data.summary);
+        }
       }
     } catch (error) {
       console.error('Error fetching funds:', error);
@@ -139,6 +147,18 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
 
       // Create expense
       const expenseData = { ...expenseForm };
+      
+      // Handle event selection logic
+      if (expenseForm.eventSelectionType === 'specific' && expenseForm.specificEvent) {
+        expenseData.specificEvent = expenseForm.specificEvent;
+      } else {
+        // Remove specificEvent if using general events
+        delete expenseData.specificEvent;
+      }
+      
+      // Clean up UI-only fields
+      delete expenseData.eventSelectionType;
+      
       if (!expenseForm.payImmediately) {
         delete expenseData.fundCategory;
         // Keep paymentMethod as it's required by backend validation
@@ -278,19 +298,103 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
               </select>
             </div>
 
+            {/* Event Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Event
+                Event/Purpose
               </label>
-              <select
-                value={expenseForm.event}
-                onChange={(e) => setExpenseForm({...expenseForm, event: e.target.value})}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
-              >
-                {eventOptions.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+              
+              {/* Event Type Selection */}
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <label className="relative cursor-pointer">
+                  <input
+                    type="radio"
+                    name="eventSelectionType"
+                    value="general"
+                    checked={expenseForm.eventSelectionType === 'general'}
+                    onChange={(e) => setExpenseForm({
+                      ...expenseForm, 
+                      eventSelectionType: e.target.value,
+                      specificEvent: ''
+                    })}
+                    className="sr-only"
+                  />
+                  <div className={`border rounded-lg p-3 text-center text-sm font-medium ${
+                    expenseForm.eventSelectionType === 'general'
+                      ? 'border-temple-500 bg-temple-50 text-temple-700'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}>
+                    General Category
+                  </div>
+                </label>
+                <label className="relative cursor-pointer">
+                  <input
+                    type="radio"
+                    name="eventSelectionType"
+                    value="specific"
+                    checked={expenseForm.eventSelectionType === 'specific'}
+                    onChange={(e) => setExpenseForm({
+                      ...expenseForm, 
+                      eventSelectionType: e.target.value,
+                      event: 'general'
+                    })}
+                    className="sr-only"
+                  />
+                  <div className={`border rounded-lg p-3 text-center text-sm font-medium ${
+                    expenseForm.eventSelectionType === 'specific'
+                      ? 'border-temple-500 bg-temple-50 text-temple-700'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}>
+                    Specific Event
+                  </div>
+                </label>
+              </div>
+
+              {/* General Event Categories */}
+              {expenseForm.eventSelectionType === 'general' && (
+                <div className="mt-3">
+                  <select
+                    value={expenseForm.event}
+                    onChange={(e) => setExpenseForm({...expenseForm, event: e.target.value})}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                  >
+                    {eventOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Specific Event Selection */}
+              {expenseForm.eventSelectionType === 'specific' && (
+                <div className="mt-3">
+                  <select
+                    value={expenseForm.specificEvent}
+                    onChange={(e) => setExpenseForm({...expenseForm, specificEvent: e.target.value})}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                  >
+                    <option value="">Select a specific event...</option>
+                    {events
+                      .filter(event => event.status !== 'cancelled')
+                      .sort((a, b) => new Date(a.date) - new Date(b.date))
+                      .map((event) => {
+                        const eventDate = new Date(event.date);
+                        const isCompleted = eventDate < new Date() || event.status === 'completed';
+                        return (
+                          <option key={event._id} value={event._id}>
+                            {event.name} - {eventDate.toLocaleDateString()}
+                            {isCompleted ? ' (Completed)' : ''}
+                          </option>
+                        );
+                      })}
+                  </select>
+                  {expenseForm.specificEvent && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      💡 You can add expenses to completed events for record keeping
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -448,6 +552,7 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
 };
 
 const Expenses = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   
   // Check if user has access to the expenses module
@@ -490,6 +595,7 @@ const Expenses = () => {
     totalExpenses: 0
   });
   const [availableInventory, setAvailableInventory] = useState([]);
+  const [availableFunds, setAvailableFunds] = useState([]);
   const [showChallanModal, setShowChallanModal] = useState(false);
   const [challanData, setChallanData] = useState(null);
 
@@ -529,6 +635,14 @@ const Expenses = () => {
   useEffect(() => {
     fetchExpenses();
   }, [filters, pagination.current]);
+
+  useEffect(() => {
+    fetchAvailableFunds();
+    // Fetch events for dropdown if user has permission
+    if (canAccessModule(user, 'events')) {
+      dispatch(getEvents());
+    }
+  }, [dispatch, user]);
 
   const fetchExpenses = async () => {
     try {
@@ -628,6 +742,25 @@ const Expenses = () => {
       month: '2-digit',
       year: 'numeric'
     });
+  };
+
+  const fetchAvailableFunds = async () => {
+    try {
+      const token = localStorage.getItem('temple_token');
+      const response = await fetch('/api/funds', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setAvailableFunds(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching funds:', error);
+    }
   };
 
   const fetchAvailableInventory = async () => {
@@ -837,12 +970,14 @@ const Expenses = () => {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <DocumentTextIcon className="h-8 w-8 text-blue-400" />
+                <CurrencyRupeeIcon className="h-8 w-8 text-green-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Records</dt>
-                  <dd className="text-lg font-medium text-gray-900">{summary.totalExpenses}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Available Balance</dt>
+                  <dd className="text-lg font-medium text-gray-900">
+                    {formatCurrency(availableFunds.reduce((total, fund) => total + (fund.balance.cash + fund.balance.upi), 0))}
+                  </dd>
                 </dl>
               </div>
             </div>

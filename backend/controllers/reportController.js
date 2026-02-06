@@ -104,9 +104,158 @@ const getDashboardStats = async (req, res, next) => {
     const monthlyTotalDonations = monthlyDonations.reduce((sum, d) => sum + d.amount, 0);
     const monthlyTotalExpenses = monthlyExpenses[0]?.amount || 0;
 
+    // Get trend data for last 6 months from database
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const trendData = await Donation.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: sixMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' }
+          },
+          income: { $sum: { $ifNull: ['$amount', 0] } }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1 }
+      },
+      {
+        $project: {
+          period: {
+            $dateToString: {
+              format: '%b',
+              date: {
+                $dateFromParts: {
+                  year: '$_id.year',
+                  month: '$_id.month'
+                }
+              }
+            }
+          },
+          income: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get expense trend data for same period
+    const expenseTrendData = await Expense.aggregate([
+      {
+        $match: {
+          billDate: { $gte: sixMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$billDate' },
+            month: { $month: '$billDate' }
+          },
+          expenses: { $sum: '$amount' }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1 }
+      }
+    ]);
+
+    // Merge income and expense trend data
+    const combinedTrendData = trendData.map(income => {
+      const expense = expenseTrendData.find(exp => 
+        exp._id.year === income._id?.year && exp._id.month === income._id?.month
+      );
+      return {
+        period: income.period,
+        income: income.income || 0,
+        expenses: expense?.expenses || 0
+      };
+    });
+
+    // Get category breakdown from donations
+    const categoryData = await Donation.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth } } },
+      {
+        $group: {
+          _id: '$event',
+          value: { $sum: { $ifNull: ['$amount', 0] } }
+        }
+      },
+      {
+        $project: {
+          name: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'general'] }, then: 'General Donations' },
+                { case: { $in: ['$_id', ['festival-expenses', 'festival']] }, then: 'Festival Donations' },
+                { case: { $eq: ['$_id', 'anadhanam'] }, then: 'Anadhanam' },
+                { case: { $in: ['$_id', ['guru-poojai', 'pradosham']] }, then: 'Puja Offerings' }
+              ],
+              default: 'Other'
+            }
+          },
+          value: 1,
+          _id: 0
+        }
+      },
+      { $match: { value: { $gt: 0 } } }
+    ]);
+
+    // Get top donors from database
+    const topDonors = await Donation.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth } } },
+      {
+        $group: {
+          _id: '$donor.name',
+          totalAmount: { $sum: { $ifNull: ['$amount', 0] } },
+          donationCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          name: '$_id',
+          totalAmount: 1,
+          donationCount: 1,
+          _id: 0
+        }
+      },
+      { $sort: { totalAmount: -1 } },
+      { $limit: 5 }
+    ]);
+
+    // Monthly data is same as trend data
+    const monthlyData = combinedTrendData;
+
     res.status(200).json({
       success: true,
       data: {
+        // Summary metrics for cards
+        totalIncome: monthlyTotalDonations,
+        totalExpenses: monthlyTotalExpenses,
+        netBalance: monthlyTotalDonations - monthlyTotalExpenses,
+        cashOnHand: monthlyTotalDonations - monthlyTotalExpenses, // Simplified calculation
+        
+        // Chart data from database
+        trendData: combinedTrendData,
+        categoryData: categoryData.length > 0 ? categoryData : [{ name: 'No data', value: 0 }],
+        monthlyData,
+        topDonors,
+        
+        // Calculate metrics from database data
+        metrics: {
+          avgDonation: monthlyDonations.length > 0 ? Math.round(monthlyTotalDonations / monthlyDonations.reduce((sum, d) => sum + d.count, 0)) : 0,
+          totalDonors: topDonors.length,
+          avgExpense: monthlyExpenses.length > 0 && monthlyExpenses[0].count > 0 ? Math.round(monthlyTotalExpenses / monthlyExpenses[0].count) : 0,
+          expenseCategories: (await Expense.distinct('category')).length || 0
+        },
+        
+        // Legacy data structure
         today: {
           donations: {
             data: todayDonations,
@@ -211,9 +360,157 @@ const getIncomeReport = async (req, res, next) => {
     const totalAmount = incomeByType.reduce((sum, income) => sum + income.amount, 0);
     const totalCount = incomeByType.reduce((sum, income) => sum + income.count, 0);
 
+    // Get trend data for last 12 months from database
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+    const trendData = await Donation.aggregate([
+      {
+        $match: {
+          ...matchCriteria,
+          createdAt: { $gte: twelveMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' }
+          },
+          amount: { $sum: { $ifNull: ['$amount', 0] } },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1 }
+      },
+      {
+        $project: {
+          period: {
+            $dateToString: {
+              format: '%b',
+              date: {
+                $dateFromParts: {
+                  year: '$_id.year',
+                  month: '$_id.month'
+                }
+              }
+            }
+          },
+          amount: 1,
+          count: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get category data from database
+    const categoryData = await Donation.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: '$event',
+          value: { $sum: { $ifNull: ['$amount', 0] } },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          name: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'general'] }, then: 'General Donation' },
+                { case: { $in: ['$_id', ['guru-poojai', 'pradosham']] }, then: 'Pooja Offerings' },
+                { case: { $in: ['$_id', ['festival', 'festival-expenses']] }, then: 'Festival Donations' },
+                { case: { $eq: ['$_id', 'anadhanam'] }, then: 'Anadhanam' }
+              ],
+              default: 'Other'
+            }
+          },
+          value: 1,
+          count: 1,
+          _id: 0
+        }
+      },
+      { $match: { value: { $gt: 0 } } }
+    ]);
+
+    // Get payment method data from database
+    const paymentMethodData = await Donation.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: '$type',
+          amount: { $sum: { $ifNull: ['$amount', 0] } },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          method: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'cash'] }, then: 'Cash' },
+                { case: { $eq: ['$_id', 'upi'] }, then: 'UPI' },
+                { case: { $eq: ['$_id', 'bank-transfer'] }, then: 'Bank Transfer' }
+              ],
+              default: 'Other'
+            }
+          },
+          amount: 1,
+          count: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get top donors from database
+    const topDonors = await Donation.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: {
+            name: '$donor.name',
+            phone: '$donor.mobile'
+          },
+          totalDonated: { $sum: { $ifNull: ['$amount', 0] } },
+          donationCount: { $sum: 1 },
+          firstDonation: { $min: '$createdAt' },
+          lastDonation: { $max: '$createdAt' }
+        }
+      },
+      {
+        $project: {
+          name: '$_id.name',
+          phone: '$_id.phone',
+          totalDonated: 1,
+          donationCount: 1,
+          avgDonation: { $divide: ['$totalDonated', '$donationCount'] },
+          firstDonation: 1,
+          lastDonation: 1,
+          _id: 0
+        }
+      },
+      { $sort: { totalDonated: -1 } },
+      { $limit: 5 }
+    ]);
+
     res.status(200).json({
       success: true,
       data: {
+        // Summary metrics
+        totalAmount,
+        totalCount,
+        averageAmount: totalCount > 0 ? Math.round(totalAmount / totalCount) : 0,
+        uniqueDonors: topDonors.length,
+        
+        // Chart data
+        trendData,
+        categoryData,
+        paymentMethodData,
+        topDonors,
+        
+        // Legacy structure
         summary: {
           totalAmount,
           totalCount,
@@ -293,9 +590,190 @@ const getExpenseReport = async (req, res, next) => {
     const totalAmount = expensesByCategory.reduce((sum, expense) => sum + expense.amount, 0);
     const totalCount = expensesByCategory.reduce((sum, expense) => sum + expense.count, 0);
 
+    // Get trend data for last 12 months from database
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+    const trendData = await Expense.aggregate([
+      {
+        $match: {
+          ...matchCriteria,
+          billDate: { $gte: twelveMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$billDate' },
+            month: { $month: '$billDate' }
+          },
+          amount: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { '_id.year': 1, '_id.month': 1 }
+      },
+      {
+        $project: {
+          period: {
+            $dateToString: {
+              format: '%b',
+              date: {
+                $dateFromParts: {
+                  year: '$_id.year',
+                  month: '$_id.month'
+                }
+              }
+            }
+          },
+          amount: 1,
+          count: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get category data from database
+    const categoryData = await Expense.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: '$category',
+          value: { $sum: '$amount' }
+        }
+      },
+      {
+        $project: {
+          name: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'cooking-gas-fuel'] }, then: 'Cooking Gas & Fuel' },
+                { case: { $eq: ['$_id', 'labor-charges'] }, then: 'Labor Charges' },
+                { case: { $eq: ['$_id', 'electricity-bill'] }, then: 'Electricity Bill' },
+                { case: { $eq: ['$_id', 'maintenance'] }, then: 'Maintenance' },
+                { case: { $eq: ['$_id', 'festival-expenses'] }, then: 'Festival Expenses' },
+                { case: { $eq: ['$_id', 'anadhanam-supplies'] }, then: 'Anadhanam Supplies' }
+              ],
+              default: 'Other'
+            }
+          },
+          value: 1,
+          _id: 0
+        }
+      },
+      { $match: { value: { $gt: 0 } } }
+    ]);
+
+    // Get status data from database
+    const statusData = await Expense.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: '$status',
+          amount: { $sum: '$amount' }
+        }
+      },
+      {
+        $project: {
+          status: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'paid'] }, then: 'Paid' },
+                { case: { $eq: ['$_id', 'pending'] }, then: 'Pending' },
+                { case: { $eq: ['$_id', 'approved'] }, then: 'Approved' },
+                { case: { $eq: ['$_id', 'rejected'] }, then: 'Rejected' }
+              ],
+              default: 'Other'
+            }
+          },
+          amount: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get payment method data from database
+    const paymentMethodData = await Expense.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: '$paymentMethod',
+          amount: { $sum: '$amount' }
+        }
+      },
+      {
+        $project: {
+          method: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id', 'cash'] }, then: 'Cash' },
+                { case: { $eq: ['$_id', 'bank-transfer'] }, then: 'Bank Transfer' },
+                { case: { $eq: ['$_id', 'upi'] }, then: 'UPI' },
+                { case: { $eq: ['$_id', 'cheque'] }, then: 'Cheque' }
+              ],
+              default: 'Other'
+            }
+          },
+          amount: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    // Get top vendors from database
+    const topVendors = await Expense.aggregate([
+      { $match: matchCriteria },
+      {
+        $group: {
+          _id: {
+            name: '$vendor.name',
+            contact: '$vendor.contact'
+          },
+          totalAmount: { $sum: '$amount' },
+          transactionCount: { $sum: 1 },
+          lastTransaction: { $max: '$billDate' }
+        }
+      },
+      {
+        $project: {
+          name: '$_id.name',
+          contact: '$_id.contact',
+          totalAmount: 1,
+          transactionCount: 1,
+          lastTransaction: 1,
+          _id: 0
+        }
+      },
+      { $sort: { totalAmount: -1 } },
+      { $limit: 5 }
+    ]);
+
+    // Get recent expenses from database
+    const recentExpenses = await Expense.find(matchCriteria)
+      .populate('createdBy', 'name')
+      .sort({ billDate: -1 })
+      .limit(5)
+      .select('description vendor amount status billDate category');
+
     res.status(200).json({
       success: true,
       data: {
+        // Summary metrics
+        totalAmount,
+        totalCount,
+        averageAmount: totalCount > 0 ? Math.round(totalAmount / totalCount) : 0,
+        uniqueVendors: topVendors.length,
+        
+        // Chart data
+        trendData,
+        categoryData,
+        statusData,
+        paymentMethodData,
+        topVendors,
+        recentExpenses,
+        
+        // Legacy structure
         summary: {
           totalAmount,
           totalCount,
@@ -578,22 +1056,50 @@ const exportReport = async (req, res, next) => {
   try {
     const { reportType, format, filters } = req.body;
 
-    // This would generate export files (CSV, PDF, Excel)
-    // For now, return the data structure
     let data;
+    let filename;
+
+    // Simulate the request object for existing functions
+    const mockReq = { 
+      query: filters || {},
+      user: req.user 
+    };
+    const mockRes = {
+      data: null,
+      status: () => mockRes,
+      json: (result) => { mockRes.data = result; return mockRes; }
+    };
 
     switch (reportType) {
-      case 'income':
-        // Call getIncomeReport logic
+      case 'financial-summary':
+        await getDashboardStats(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `financial-summary-${new Date().toISOString().split('T')[0]}`;
         break;
-      case 'expense':
-        // Call getExpenseReport logic
+      case 'donations':
+        await getIncomeReport(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `donation-report-${new Date().toISOString().split('T')[0]}`;
+        break;
+      case 'expenses':
+        await getExpenseReport(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `expense-report-${new Date().toISOString().split('T')[0]}`;
         break;
       case 'balance':
-        // Call getBalanceSheet logic
+        await getBalanceSheet(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `balance-sheet-${new Date().toISOString().split('T')[0]}`;
         break;
       case 'inventory':
-        // Call getInventoryReport logic
+        await getInventoryReport(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `inventory-report-${new Date().toISOString().split('T')[0]}`;
+        break;
+      case 'donors':
+        await getDonorReport(mockReq, mockRes, next);
+        data = mockRes.data?.data;
+        filename = `donor-report-${new Date().toISOString().split('T')[0]}`;
         break;
       default:
         return res.status(400).json({
@@ -602,12 +1108,249 @@ const exportReport = async (req, res, next) => {
         });
     }
 
+    if (!data) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate report data'
+      });
+    }
+
     res.status(200).json({
       success: true,
-      message: `${reportType} report export initiated`,
-      format,
-      filters
+      message: `${reportType} report export completed`,
+      data,
+      filename,
+      format: format || 'json',
+      filters,
+      timestamp: new Date().toISOString()
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all scheduled reports
+// @route   GET /api/reports/scheduled
+// @access  Private
+const getScheduledReports = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    const scheduledReports = await ScheduledReport.find({ createdBy: req.user.id })
+      .populate('createdBy', 'name username')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: scheduledReports.length,
+      data: scheduledReports
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Create scheduled report
+// @route   POST /api/reports/schedule
+// @access  Private
+const createScheduledReport = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    // Add user to req.body
+    req.body.createdBy = req.user.id;
+
+    const scheduledReport = await ScheduledReport.create(req.body);
+
+    res.status(201).json({
+      success: true,
+      data: scheduledReport
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update scheduled report
+// @route   PATCH /api/reports/scheduled/:id
+// @access  Private
+const updateScheduledReport = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    let scheduledReport = await ScheduledReport.findById(req.params.id);
+
+    if (!scheduledReport) {
+      return res.status(404).json({
+        success: false,
+        message: 'Scheduled report not found'
+      });
+    }
+
+    // Make sure user owns the scheduled report
+    if (scheduledReport.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to update this scheduled report'
+      });
+    }
+
+    scheduledReport = await ScheduledReport.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+
+    res.status(200).json({
+      success: true,
+      data: scheduledReport
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete scheduled report
+// @route   DELETE /api/reports/scheduled/:id
+// @access  Private
+const deleteScheduledReport = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    const scheduledReport = await ScheduledReport.findById(req.params.id);
+
+    if (!scheduledReport) {
+      return res.status(404).json({
+        success: false,
+        message: 'Scheduled report not found'
+      });
+    }
+
+    // Make sure user owns the scheduled report
+    if (scheduledReport.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to delete this scheduled report'
+      });
+    }
+
+    await scheduledReport.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      data: {}
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get scheduled reports due for execution
+// @route   GET /api/reports/scheduled/due
+// @access  Private (Admin only)
+const getDueScheduledReports = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    const now = new Date();
+    const dueReports = await ScheduledReport.find({
+      active: true,
+      nextRun: { $lte: now }
+    }).populate('createdBy', 'name email');
+
+    res.status(200).json({
+      success: true,
+      count: dueReports.length,
+      data: dueReports
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Execute scheduled report
+// @route   POST /api/reports/scheduled/:id/execute
+// @access  Private (Admin only)
+const executeScheduledReport = async (req, res, next) => {
+  try {
+    const ScheduledReport = require('../models/ScheduledReport');
+    
+    const scheduledReport = await ScheduledReport.findById(req.params.id);
+
+    if (!scheduledReport) {
+      return res.status(404).json({
+        success: false,
+        message: 'Scheduled report not found'
+      });
+    }
+
+    if (!scheduledReport.active) {
+      return res.status(400).json({
+        success: false,
+        message: 'Scheduled report is not active'
+      });
+    }
+
+    try {
+      // Generate report data
+      const mockReq = { 
+        query: scheduledReport.filters || {},
+        user: req.user 
+      };
+      const mockRes = {
+        data: null,
+        status: () => mockRes,
+        json: (result) => { mockRes.data = result; return mockRes; }
+      };
+
+      // Call appropriate report function
+      switch (scheduledReport.reportType) {
+        case 'financial-summary':
+          await getDashboardStats(mockReq, mockRes, next);
+          break;
+        case 'donations':
+          await getIncomeReport(mockReq, mockRes, next);
+          break;
+        case 'expenses':
+          await getExpenseReport(mockReq, mockRes, next);
+          break;
+        case 'balance':
+          await getBalanceSheet(mockReq, mockRes, next);
+          break;
+        case 'inventory':
+          await getInventoryReport(mockReq, mockRes, next);
+          break;
+        case 'donors':
+          await getDonorReport(mockReq, mockRes, next);
+          break;
+        default:
+          throw new Error('Invalid report type');
+      }
+
+      // Update schedule execution tracking
+      scheduledReport.lastRun = new Date();
+      scheduledReport.nextRun = scheduledReport.calculateNextRun();
+      scheduledReport.runCount += 1;
+      scheduledReport.lastError = null;
+      await scheduledReport.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Scheduled report executed successfully',
+        data: {
+          reportData: mockRes.data?.data,
+          nextRun: scheduledReport.nextRun,
+          runCount: scheduledReport.runCount
+        }
+      });
+
+    } catch (error) {
+      // Update failure tracking
+      scheduledReport.failureCount += 1;
+      scheduledReport.lastError = error.message;
+      await scheduledReport.save();
+      
+      throw error;
+    }
   } catch (error) {
     next(error);
   }
@@ -620,5 +1363,11 @@ module.exports = {
   getBalanceSheet,
   getInventoryReport,
   getDonorReport,
-  exportReport
+  exportReport,
+  getScheduledReports,
+  createScheduledReport,
+  updateScheduledReport,
+  deleteScheduledReport,
+  getDueScheduledReports,
+  executeScheduledReport
 };

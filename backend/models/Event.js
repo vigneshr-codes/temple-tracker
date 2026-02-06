@@ -85,6 +85,22 @@ const eventSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Virtual field to get linked donations count
+eventSchema.virtual('linkedDonationsCount', {
+  ref: 'Donation',
+  localField: '_id',
+  foreignField: 'specificEvent',
+  count: true,
+});
+
+// Virtual field to get linked expenses count
+eventSchema.virtual('linkedExpensesCount', {
+  ref: 'Expense',
+  localField: '_id',
+  foreignField: 'specificEvent',
+  count: true,
+});
+
 // Calculate total donations and expenses before saving
 eventSchema.pre('save', function(next) {
   if (this.isModified('donations')) {
@@ -101,5 +117,17 @@ eventSchema.pre('save', function(next) {
   
   next();
 });
+
+// Method to update event status based on date
+eventSchema.methods.updateStatusBasedOnDate = function() {
+  const now = new Date();
+  const eventDate = new Date(this.date);
+  
+  if (this.status === 'upcoming' && eventDate < now) {
+    this.status = 'completed';
+  }
+  
+  return this.status;
+};
 
 module.exports = mongoose.model('Event', eventSchema);

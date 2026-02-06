@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { Dialog, Transition } from '@headlessui/react';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
 import {
@@ -12,7 +13,8 @@ import {
   EyeIcon,
   CheckCircleIcon,
   ClockIcon,
-  BuildingLibraryIcon
+  BuildingLibraryIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 const Funds = () => {
@@ -44,6 +46,18 @@ const Funds = () => {
   const [pendingDonations, setPendingDonations] = useState([]);
   const [pendingExpenses, setPendingExpenses] = useState([]);
   const [totalBalances, setTotalBalances] = useState({ cash: 0, upi: 0, total: 0 });
+  const [allocationForm, setAllocationForm] = useState({
+    expenseId: '',
+    fundCategory: 'general',
+    paymentMethod: 'cash'
+  });
+  const [transferForm, setTransferForm] = useState({
+    fromCategory: 'general',
+    toCategory: 'maintenance',
+    amount: '',
+    method: 'cash',
+    description: ''
+  });
 
   // Fund categories with labels
   const fundCategories = [
@@ -189,6 +203,39 @@ const Funds = () => {
     } catch (error) {
       console.error('Error allocating expense:', error);
       showNotification('Failed to allocate expense', 'error');
+    }
+  };
+
+  const transferFunds = async (transferData) => {
+    try {
+      const token = localStorage.getItem('temple_token');
+      const response = await fetch('/api/funds/transfer', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(transferData)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setShowTransferFunds(false);
+        fetchFunds();
+        setTransferForm({
+          fromCategory: 'general',
+          toCategory: 'maintenance',
+          amount: '',
+          method: 'cash',
+          description: ''
+        });
+        showNotification(`Successfully transferred ${formatCurrency(transferData.amount)} from ${transferData.fromCategory} to ${transferData.toCategory} fund`, 'success');
+      } else {
+        showNotification(data.message || 'Failed to transfer funds', 'error');
+      }
+    } catch (error) {
+      console.error('Error transferring funds:', error);
+      showNotification('Failed to transfer funds', 'error');
     }
   };
 
@@ -616,6 +663,323 @@ const Funds = () => {
           </div>
         </div>
       )}
+
+      {/* Allocate Expense Modal */}
+      <Transition appear show={showAllocateExpense} as={Fragment}>
+        <Dialog as="div" className="relative z-10" onClose={() => setShowAllocateExpense(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  <div className="flex items-center justify-between mb-6">
+                    <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                      Allocate Expense to Fund
+                    </Dialog.Title>
+                    <button
+                      onClick={() => setShowAllocateExpense(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Expense Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Select Expense to Allocate
+                      </label>
+                      <select
+                        value={allocationForm.expenseId}
+                        onChange={(e) => setAllocationForm({...allocationForm, expenseId: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        <option value="">Select an expense...</option>
+                        {pendingExpenses.map((expense) => (
+                          <option key={expense._id} value={expense._id}>
+                            {expense.description} - {formatCurrency(expense.amount)} ({expense.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Fund Category Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Allocate from Fund
+                      </label>
+                      <select
+                        value={allocationForm.fundCategory}
+                        onChange={(e) => setAllocationForm({...allocationForm, fundCategory: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        {fundCategories.map((category) => (
+                          <option key={category.value} value={category.value}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Payment Method Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Method
+                      </label>
+                      <select
+                        value={allocationForm.paymentMethod}
+                        onChange={(e) => setAllocationForm({...allocationForm, paymentMethod: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                      </select>
+                    </div>
+
+                    {/* Fund Balance Display */}
+                    {allocationForm.fundCategory && (
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <p className="text-sm text-gray-600">
+                          Available {allocationForm.paymentMethod} balance in {fundCategories.find(f => f.value === allocationForm.fundCategory)?.label}: 
+                          <span className="font-medium ml-1">
+                            {formatCurrency(
+                              funds.find(f => f.category === allocationForm.fundCategory)?.balance?.[allocationForm.paymentMethod] || 0
+                            )}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => {
+                        if (allocationForm.expenseId && allocationForm.fundCategory) {
+                          allocateExpense(allocationForm.expenseId, allocationForm.fundCategory, allocationForm.paymentMethod);
+                          setAllocationForm({ expenseId: '', fundCategory: 'general', paymentMethod: 'cash' });
+                        }
+                      }}
+                      disabled={!allocationForm.expenseId}
+                      className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Allocate Expense
+                    </button>
+                    <button
+                      onClick={() => setShowAllocateExpense(false)}
+                      className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Transfer Funds Modal */}
+      <Transition appear show={showTransferFunds} as={Fragment}>
+        <Dialog as="div" className="relative z-10" onClose={() => setShowTransferFunds(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  <div className="flex items-center justify-between mb-6">
+                    <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                      Transfer Funds Between Categories
+                    </Dialog.Title>
+                    <button
+                      onClick={() => setShowTransferFunds(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* From Fund Category */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Transfer From Fund
+                      </label>
+                      <select
+                        value={transferForm.fromCategory}
+                        onChange={(e) => setTransferForm({...transferForm, fromCategory: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        {fundCategories.map((category) => (
+                          <option key={category.value} value={category.value}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* To Fund Category */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Transfer To Fund
+                      </label>
+                      <select
+                        value={transferForm.toCategory}
+                        onChange={(e) => setTransferForm({...transferForm, toCategory: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        {fundCategories.filter(cat => cat.value !== transferForm.fromCategory).map((category) => (
+                          <option key={category.value} value={category.value}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Transfer Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Transfer Amount
+                      </label>
+                      <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₹</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          value={transferForm.amount}
+                          onChange={(e) => setTransferForm({...transferForm, amount: e.target.value})}
+                          className="block w-full pl-7 pr-12 rounded-md border-gray-300 focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                          placeholder="0.00"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment Method */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Method
+                      </label>
+                      <select
+                        value={transferForm.method}
+                        onChange={(e) => setTransferForm({...transferForm, method: e.target.value})}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        required
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                      </select>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description (Optional)
+                      </label>
+                      <textarea
+                        value={transferForm.description}
+                        onChange={(e) => setTransferForm({...transferForm, description: e.target.value})}
+                        rows={3}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                        placeholder="Reason for transfer..."
+                      />
+                    </div>
+
+                    {/* Available Balance Display */}
+                    {transferForm.fromCategory && (
+                      <div className="bg-gray-50 p-3 rounded-md">
+                        <p className="text-sm text-gray-600">
+                          Available {transferForm.method} balance in {fundCategories.find(f => f.value === transferForm.fromCategory)?.label}: 
+                          <span className="font-medium ml-1">
+                            {formatCurrency(
+                              funds.find(f => f.category === transferForm.fromCategory)?.balance?.[transferForm.method] || 0
+                            )}
+                          </span>
+                        </p>
+                        {transferForm.amount && parseFloat(transferForm.amount) > (funds.find(f => f.category === transferForm.fromCategory)?.balance?.[transferForm.method] || 0) && (
+                          <p className="text-sm text-red-600 mt-1">
+                            ⚠️ Insufficient balance for this transfer
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => {
+                        if (transferForm.fromCategory && transferForm.toCategory && transferForm.amount) {
+                          transferFunds({
+                            ...transferForm,
+                            amount: parseFloat(transferForm.amount)
+                          });
+                        }
+                      }}
+                      disabled={!transferForm.fromCategory || !transferForm.toCategory || !transferForm.amount || 
+                        parseFloat(transferForm.amount) > (funds.find(f => f.category === transferForm.fromCategory)?.balance?.[transferForm.method] || 0)}
+                      className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Transfer Funds
+                    </button>
+                    <button
+                      onClick={() => setShowTransferFunds(false)}
+                      className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
 
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, lazy, Suspense, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Dialog, Transition } from '@headlessui/react';
 import {
@@ -14,6 +14,10 @@ import {
 import { getEvents, createEvent, updateEvent, deleteEvent, reset } from '../../features/events/eventSlice';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
+import { TamilDateDisplay } from '../../components/TamilCalendar';
+
+// Lazy load the heavy Tamil Calendar component
+const TamilYearCalendar = lazy(() => import('../../components/TamilCalendar/TamilYearCalendar'));
 
 const Events = () => {
   const dispatch = useDispatch();
@@ -46,6 +50,7 @@ const Events = () => {
     startDate: '',
     endDate: ''
   });
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
 
   const [formData, setFormData] = useState({
     name: '',
@@ -214,8 +219,32 @@ const Events = () => {
             Manage temple events, festivals, and special occasions
           </p>
         </div>
-        {hasPermission(currentUser, 'events', 'create') && (
-          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex items-center space-x-3">
+          <div className="inline-flex rounded-lg shadow-sm" role="group">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 text-sm font-medium rounded-l-lg border ${
+                viewMode === 'list'
+                  ? 'bg-temple-600 text-white border-temple-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              List View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 text-sm font-medium rounded-r-lg border ${
+                viewMode === 'calendar'
+                  ? 'bg-temple-600 text-white border-temple-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Tamil Calendar
+            </button>
+          </div>
+          {hasPermission(currentUser, 'events', 'create') && (
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-md border border-transparent bg-gradient-to-r from-temple-600 to-saffron-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-temple-700 hover:to-saffron-600 focus:outline-none focus:ring-2 focus:ring-temple-500 focus:ring-offset-2 transition-all sm:w-auto"
@@ -224,8 +253,8 @@ const Events = () => {
               <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
               Add Event
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -269,7 +298,19 @@ const Events = () => {
         </select>
       </div>
 
-      {/* Events List */}
+      {/* Events List or Calendar View */}
+      {viewMode === 'calendar' ? (
+        <div className="mt-8">
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-600"></div>
+              <span className="ml-3 text-gray-600">Loading Tamil Calendar...</span>
+            </div>
+          }>
+            <TamilYearCalendar year={new Date().getFullYear()} />
+          </Suspense>
+        </div>
+      ) : (
       <div className="mt-8 flex flex-col">
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
@@ -327,7 +368,13 @@ const Events = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(event.date)}
+                          <TamilDateDisplay 
+                            date={event.date} 
+                            variant="inline"
+                            showFestivals={false}
+                            showYear={true}
+                            className="block"
+                          />
                           {event.isRecurring && (
                             <div className="text-xs text-gray-500">Recurring</div>
                           )}
@@ -367,34 +414,35 @@ const Events = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Event Modal */}
       <Transition appear show={isModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-10" onClose={handleCloseModal}>
           <Transition.Child
             as={Fragment}
-            enter="ease-out duration-300"
+            enter="ease-out duration-75"
             enterFrom="opacity-0"
             enterTo="opacity-100"
-            leave="ease-in duration-200"
+            leave="ease-in duration-75"
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
+            <div className="fixed inset-0 bg-black bg-opacity-25 will-change-auto" />
           </Transition.Child>
 
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4 text-center">
               <Transition.Child
                 as={Fragment}
-                enter="ease-out duration-300"
+                enter="ease-out duration-75"
                 enterFrom="opacity-0 scale-95"
                 enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
+                leave="ease-in duration-75"
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all will-change-transform backface-visibility-hidden">
                   <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
                     {editingEvent ? 'Edit Event' : 'Create New Event'}
                   </Dialog.Title>

@@ -16,9 +16,34 @@ const createExpense = async (req, res, next) => {
       });
     }
 
+    // Handle event linking logic
+    let eventLinkStatus = 'general';
+    const expenseBody = { ...req.body };
+    
+    if (expenseBody.specificEvent) {
+      const Event = require('../models/Event');
+      const event = await Event.findById(expenseBody.specificEvent);
+      
+      if (event) {
+        // Determine link status based on event status and date
+        const now = new Date();
+        if (event.date < now && event.status === 'completed') {
+          eventLinkStatus = 'linked-completed';
+        } else if (event.status === 'cancelled') {
+          eventLinkStatus = 'linked-cancelled';
+        } else {
+          eventLinkStatus = 'linked-active';
+        }
+      } else {
+        // Invalid event ID, remove the link
+        delete expenseBody.specificEvent;
+      }
+    }
+
     const expenseData = {
-      ...req.body,
-      createdBy: req.user._id
+      ...expenseBody,
+      createdBy: req.user._id,
+      eventLinkStatus
     };
 
     const expense = new Expense(expenseData);

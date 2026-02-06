@@ -1,0 +1,177 @@
+import { gregorianToTamil, getFestivalsForDate, TAMIL_FESTIVALS, TAMIL_MONTHS } from './tamilCalendar';
+
+/**
+ * Get festival suggestions for a given date
+ */
+export function getFestivalSuggestions(gregorianDate) {
+  const festivals = getFestivalsForDate(gregorianDate);
+  
+  return festivals.map(festival => ({
+    name: festival.name,
+    tamilName: festival.tamil,
+    description: festival.description,
+    suggestedEventType: 'festival',
+    eventData: {
+      name: festival.name,
+      type: 'festival',
+      description: `${festival.description}\n\nTamil Name: ${festival.tamil}`,
+      isTamilFestival: true,
+      tamilFestivalData: festival
+    }
+  }));
+}
+
+/**
+ * Get all festivals in a given month
+ */
+export function getFestivalsInMonth(year, month) {
+  const festivals = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const dayFestivals = getFestivalsForDate(date);
+    
+    if (dayFestivals.length > 0) {
+      festivals.push({
+        date,
+        day,
+        festivals: dayFestivals
+      });
+    }
+  }
+  
+  return festivals;
+}
+
+/**
+ * Get upcoming Tamil festivals within a specified number of days
+ */
+export function getUpcomingTamilFestivals(days = 30) {
+  const today = new Date();
+  const festivals = [];
+  
+  for (let i = 0; i <= days; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    
+    const dayFestivals = getFestivalsForDate(date);
+    if (dayFestivals.length > 0) {
+      festivals.push({
+        date,
+        daysFromToday: i,
+        festivals: dayFestivals,
+        isToday: i === 0,
+        isTomorrow: i === 1
+      });
+    }
+  }
+  
+  return festivals;
+}
+
+/**
+ * Check if a date conflicts with a Tamil festival
+ */
+export function checkFestivalConflict(gregorianDate) {
+  const festivals = getFestivalsForDate(gregorianDate);
+  if (festivals.length === 0) return null;
+  
+  return {
+    hasConflict: true,
+    festivals,
+    message: `This date coincides with ${festivals.map(f => f.tamil).join(' and ')}`
+  };
+}
+
+/**
+ * Get Tamil month information for a given date
+ */
+export function getTamilMonthInfo(gregorianDate) {
+  const tamilDate = gregorianToTamil(gregorianDate);
+  return {
+    tamilDate,
+    monthInfo: tamilDate.month,
+    significance: getMonthSignificance(tamilDate.month.english)
+  };
+}
+
+/**
+ * Get significance of Tamil months
+ */
+function getMonthSignificance(monthName) {
+  const significance = {
+    'Chithirai': 'Tamil New Year month, spring season, new beginnings',
+    'Vaikaasi': 'Hot season, Murugan worship, temple festivals',
+    'Aani': 'Early monsoon, Goddess worship, marriage season',
+    'Aadi': 'Monsoon month, Amman festivals, particularly auspicious for Goddess worship',
+    'Aavani': 'Post-monsoon, sacred thread ceremony, Ganesha festivals',
+    'Purattasi': 'Saturn worship month, fasting and prayers, particularly for Vishnu worship',
+    'Aippasi': 'Festival season begins, Deepavali preparations',
+    'Karthikai': 'Festival of lights, Karthikai Deepam, winter begins',
+    'Maargazhi': 'Most sacred month, devotional practices, Thiruvempavai',
+    'Thai': 'Harvest season, prosperity month, Thai Pusam',
+    'Maasi': 'Temple festivals, holy dips, particularly auspicious for temple visits',
+    'Panguni': 'Spring festivals, divine marriage celebrations, temple car festivals'
+  };
+  
+  return significance[monthName] || 'Sacred Tamil month with various observances';
+}
+
+/**
+ * Get event type suggestions based on Tamil festival
+ */
+export function getEventTypeSuggestion(festival) {
+  const festivalKeywords = {
+    'New Year': 'celebration',
+    'Deepam': 'festival',
+    'Pusam': 'religious',
+    'Amavasai': 'religious',
+    'Purnima': 'religious',
+    'Magam': 'religious',
+    'Uthiram': 'religious',
+    'Thirumanjanam': 'religious',
+    'Thiruvizha': 'festival',
+    'Velli': 'religious',
+    'Saturdays': 'religious'
+  };
+  
+  for (const [keyword, type] of Object.entries(festivalKeywords)) {
+    if (festival.name.includes(keyword) || festival.tamil.includes(keyword)) {
+      return type;
+    }
+  }
+  
+  return 'festival';
+}
+
+/**
+ * Auto-generate event suggestions for Tamil festivals
+ */
+export function generateTamilFestivalEvents(startDate, endDate) {
+  const events = [];
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  let currentDate = new Date(start);
+  while (currentDate <= end) {
+    const festivals = getFestivalsForDate(currentDate);
+    
+    festivals.forEach(festival => {
+      events.push({
+        name: festival.name,
+        tamilName: festival.tamil,
+        description: festival.description,
+        date: new Date(currentDate),
+        type: getEventTypeSuggestion(festival),
+        category: 'tamil-festival',
+        isAutoGenerated: true,
+        tamilFestivalData: festival
+      });
+    });
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return events;
+}
