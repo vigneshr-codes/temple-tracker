@@ -9,7 +9,8 @@ const {
   getEventDonations,
   getEventExpenses
 } = require('../controllers/eventController');
-const { protect, authorize, checkPermission } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 

@@ -21,16 +21,16 @@ import {
 const Settings = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  
-  // Check admin access
-  if (!hasPermission(user, 'settings', 'read') && user?.role !== 'admin') {
+
+  // Settings is admin-only
+  if (user?.role !== 'admin') {
     return (
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="text-center py-12">
           <ShieldCheckIcon className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">Access Denied</h3>
           <p className="mt-1 text-sm text-gray-500">
-            You don't have permission to access settings.
+            Only administrators can access settings.
           </p>
         </div>
       </div>

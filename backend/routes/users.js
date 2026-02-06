@@ -8,12 +8,12 @@ const {
   deleteUser,
   activateUser
 } = require('../controllers/userController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
 router.use(protect);
-router.use(authorize('admin'));
 
 const userValidation = [
   body('name').notEmpty().withMessage('Name is required'),
@@ -23,15 +23,15 @@ const userValidation = [
 ];
 
 router.route('/')
-  .get(getUsers)
-  .post(userValidation, createUser);
+  .get(checkPermission('users', 'read'), getUsers)
+  .post(checkPermission('users', 'create'), userValidation, createUser);
 
 router.route('/:id')
-  .get(getUser)
-  .put(userValidation, updateUser)
-  .delete(deleteUser);
+  .get(checkPermission('users', 'read'), getUser)
+  .put(checkPermission('users', 'update'), userValidation, updateUser)
+  .delete(checkPermission('users', 'delete'), deleteUser);
 
 router.route('/:id/activate')
-  .patch(activateUser);
+  .patch(checkPermission('users', 'update'), activateUser);
 
 module.exports = router;

@@ -6,33 +6,58 @@ const {
   getBalanceSheet,
   getInventoryReport,
   getDonorReport,
-  exportReport
+  exportReport,
+  getScheduledReports,
+  createScheduledReport,
+  updateScheduledReport,
+  deleteScheduledReport,
+  getDueScheduledReports,
+  executeScheduledReport
 } = require('../controllers/reportController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
 router.use(protect);
 
+// Report generation routes
 router.route('/dashboard')
-  .get(getDashboardStats);
+  .get(checkPermission('reports', 'read'), getDashboardStats);
 
 router.route('/income')
-  .get(getIncomeReport);
+  .get(checkPermission('reports', 'read'), getIncomeReport);
 
 router.route('/expense')
-  .get(getExpenseReport);
+  .get(checkPermission('reports', 'read'), getExpenseReport);
 
 router.route('/balance')
-  .get(getBalanceSheet);
+  .get(checkPermission('reports', 'read'), getBalanceSheet);
 
 router.route('/inventory')
-  .get(getInventoryReport);
+  .get(checkPermission('reports', 'read'), getInventoryReport);
 
 router.route('/donors')
-  .get(getDonorReport);
+  .get(checkPermission('reports', 'read'), getDonorReport);
 
 router.route('/export')
-  .post(authorize('admin'), exportReport);
+  .post(checkPermission('reports', 'export'), exportReport);
+
+// Scheduled reports routes
+router.route('/scheduled')
+  .get(checkPermission('reports', 'read'), getScheduledReports);
+
+router.route('/schedule')
+  .post(checkPermission('reports', 'create'), createScheduledReport);
+
+router.route('/scheduled/:id')
+  .patch(checkPermission('reports', 'update'), updateScheduledReport)
+  .delete(checkPermission('reports', 'delete'), deleteScheduledReport);
+
+router.route('/scheduled/due')
+  .get(checkPermission('reports', 'read'), getDueScheduledReports);
+
+router.route('/scheduled/:id/execute')
+  .post(checkPermission('reports', 'export'), executeScheduledReport);
 
 module.exports = router;

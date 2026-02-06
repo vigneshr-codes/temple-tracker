@@ -186,6 +186,7 @@ const sendTokenResponse = (user, statusCode, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        permissions: user.permissions,
         isActive: user.isActive,
         lastLogin: user.lastLogin
       }

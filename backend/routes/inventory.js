@@ -9,32 +9,33 @@ const {
   scanBarcode,
   getExpiringItems
 } = require('../controllers/inventoryController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
 router.use(protect);
 
 router.route('/')
-  .get(getInventory);
+  .get(checkPermission('inventory', 'read'), getInventory);
 
 router.route('/expiring')
-  .get(getExpiringItems);
+  .get(checkPermission('inventory', 'read'), getExpiringItems);
 
 router.route('/:id')
-  .get(getInventoryItem)
-  .put(authorize('admin'), updateInventoryItem);
+  .get(checkPermission('inventory', 'read'), getInventoryItem)
+  .put(checkPermission('inventory', 'update'), updateInventoryItem);
 
 router.route('/:id/use')
-  .post([
+  .post(checkPermission('inventory', 'update'), [
     body('quantityUsed').isNumeric().isFloat({ min: 0 }).withMessage('Quantity used must be a positive number'),
     body('purpose').notEmpty().withMessage('Purpose is required'),
   ], useInventoryItem);
 
 router.route('/:id/barcode')
-  .post(generateBarcode);
+  .post(checkPermission('inventory', 'read'), generateBarcode);
 
 router.route('/scan/:barcode')
-  .get(scanBarcode);
+  .get(checkPermission('inventory', 'read'), scanBarcode);
 
 module.exports = router;

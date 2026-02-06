@@ -13,6 +13,7 @@ import {
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { getDonations, createDonation, reset } from '../../features/donations/donationSlice';
+import { getEvents } from '../../features/events/eventSlice';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
 
@@ -21,6 +22,7 @@ const Donations = () => {
   const { donations, isLoading, isError, message, totalAmount } = useSelector(
     (state) => state.donations
   );
+  const { events } = useSelector((state) => state.events);
   const { user: currentUser } = useSelector((state) => state.auth);
 
   // Check if user can access donations module
@@ -54,11 +56,15 @@ const Donations = () => {
       name: '',
       mobile: '',
       email: '',
-      address: ''
+      address: '',
+      panNumber: '',
+      aadhaarNumber: ''
     },
     amount: '',
     upiTransactionId: '',
     event: 'general',
+    specificEvent: '',
+    eventSelectionType: 'general', // 'general' or 'specific'
     isAnonymous: false,
     notes: '',
     items: []
@@ -74,8 +80,18 @@ const Donations = () => {
   });
 
   useEffect(() => {
-    dispatch(getDonations());
-  }, [dispatch]);
+    const queryParams = {};
+    if (filters.type) queryParams.type = filters.type;
+    if (filters.startDate) queryParams.startDate = filters.startDate;
+    if (filters.endDate) queryParams.endDate = filters.endDate;
+    if (filters.event) queryParams.event = filters.event;
+    
+    dispatch(getDonations(queryParams));
+    // Fetch events for dropdown
+    if (canAccessModule(currentUser, 'events')) {
+      dispatch(getEvents());
+    }
+  }, [dispatch, filters, currentUser]);
 
   useEffect(() => {
     if (isError) {
@@ -94,6 +110,17 @@ const Donations = () => {
       ...donationForm,
       amount: donationForm.type !== 'in-kind' ? parseFloat(donationForm.amount) : 0
     };
+
+    // Handle event selection logic
+    if (donationForm.eventSelectionType === 'specific' && donationForm.specificEvent) {
+      donationData.specificEvent = donationForm.specificEvent;
+    } else {
+      // Remove specificEvent if using general events
+      delete donationData.specificEvent;
+    }
+    
+    // Clean up UI-only fields
+    delete donationData.eventSelectionType;
 
     // Fix UPI transaction ID structure for backend validation
     if (donationForm.type === 'upi' && donationForm.upiTransactionId) {
@@ -123,11 +150,15 @@ const Donations = () => {
         name: '',
         mobile: '',
         email: '',
-        address: ''
+        address: '',
+        panNumber: '',
+        aadhaarNumber: ''
       },
       amount: '',
       upiTransactionId: '',
       event: 'general',
+      specificEvent: '',
+      eventSelectionType: 'general',
       isAnonymous: false,
       notes: '',
       items: []
@@ -333,9 +364,9 @@ const Donations = () => {
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <select
-            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-temple-500 focus:border-temple-500 sm:text-sm rounded-md"
+            className="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-temple-500 focus:border-temple-500 sm:text-sm rounded-md"
             value={filters.type}
             onChange={(e) => setFilters({...filters, type: e.target.value})}
           >
@@ -344,6 +375,31 @@ const Donations = () => {
             <option value="upi">UPI</option>
             <option value="in-kind">In-Kind</option>
           </select>
+          
+          <input
+            type="date"
+            className="block w-full sm:w-auto pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-temple-500 focus:border-temple-500 sm:text-sm rounded-md"
+            value={filters.startDate}
+            onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+            placeholder="Start Date"
+          />
+          
+          <input
+            type="date"
+            className="block w-full sm:w-auto pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-temple-500 focus:border-temple-500 sm:text-sm rounded-md"
+            value={filters.endDate}
+            onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+            placeholder="End Date"
+          />
+          
+          {(filters.type || filters.startDate || filters.endDate) && (
+            <button
+              onClick={() => setFilters({ type: '', startDate: '', endDate: '', event: '' })}
+              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -505,6 +561,50 @@ const Donations = () => {
                             </div>
                           </div>
 
+                          {/* PAN and Aadhaar for 80G Receipt */}
+                          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700">
+                                PAN Number
+                                <span className="text-xs text-gray-500 ml-1">(for 80G receipt)</span>
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="ABCDE1234F"
+                                maxLength={10}
+                                value={donationForm.donor.panNumber}
+                                onChange={(e) => setDonationForm({
+                                  ...donationForm,
+                                  donor: {...donationForm.donor, panNumber: e.target.value.toUpperCase()}
+                                })}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm uppercase"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700">
+                                Aadhaar Number
+                                <span className="text-xs text-gray-500 ml-1">(for 80G receipt)</span>
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="123456789012"
+                                maxLength={12}
+                                value={donationForm.donor.aadhaarNumber}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, '');
+                                  setDonationForm({
+                                    ...donationForm,
+                                    donor: {...donationForm.donor, aadhaarNumber: value}
+                                  });
+                                }}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                              />
+                            </div>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            PAN/Aadhaar is required for donors to claim tax deduction under Section 80G
+                          </p>
+
                           {/* Amount for Cash/UPI */}
                           {donationForm.type !== 'in-kind' && (
                             <div className="mt-4">
@@ -633,18 +733,105 @@ const Donations = () => {
                             <label className="block text-sm font-medium text-gray-700">
                               Event/Purpose
                             </label>
-                            <select
-                              value={donationForm.event}
-                              onChange={(e) => setDonationForm({...donationForm, event: e.target.value})}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
-                            >
-                              <option value="general">General Donation</option>
-                              <option value="diwali">Diwali</option>
-                              <option value="janmashtami">Janmashtami</option>
-                              <option value="navratri">Navratri</option>
-                              <option value="holi">Holi</option>
-                              <option value="anadhanam">Anadhanam</option>
-                            </select>
+                            
+                            {/* Event Type Selection */}
+                            <div className="mt-2 grid grid-cols-2 gap-3">
+                              <label className="relative cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="eventSelectionType"
+                                  value="general"
+                                  checked={donationForm.eventSelectionType === 'general'}
+                                  onChange={(e) => setDonationForm({
+                                    ...donationForm, 
+                                    eventSelectionType: e.target.value,
+                                    specificEvent: ''
+                                  })}
+                                  className="sr-only"
+                                />
+                                <div className={`border rounded-lg p-3 text-center text-sm font-medium ${
+                                  donationForm.eventSelectionType === 'general'
+                                    ? 'border-temple-500 bg-temple-50 text-temple-700'
+                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                }`}>
+                                  General Category
+                                </div>
+                              </label>
+                              <label className="relative cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="eventSelectionType"
+                                  value="specific"
+                                  checked={donationForm.eventSelectionType === 'specific'}
+                                  onChange={(e) => setDonationForm({
+                                    ...donationForm, 
+                                    eventSelectionType: e.target.value,
+                                    event: 'general'
+                                  })}
+                                  className="sr-only"
+                                />
+                                <div className={`border rounded-lg p-3 text-center text-sm font-medium ${
+                                  donationForm.eventSelectionType === 'specific'
+                                    ? 'border-temple-500 bg-temple-50 text-temple-700'
+                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                }`}>
+                                  Specific Event
+                                </div>
+                              </label>
+                            </div>
+
+                            {/* General Event Categories */}
+                            {donationForm.eventSelectionType === 'general' && (
+                              <div className="mt-3">
+                                <select
+                                  value={donationForm.event}
+                                  onChange={(e) => setDonationForm({...donationForm, event: e.target.value})}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                >
+                                  <option value="general">General Donation</option>
+                                  <option value="new-moon">New Moon Day</option>
+                                  <option value="full-moon">Full Moon Day</option>
+                                  <option value="guru-poojai">Guru Poojai</option>
+                                  <option value="uthira-nakshatram">Uthira Nakshatram</option>
+                                  <option value="adi-ammavasai">Adi Ammavasai</option>
+                                  <option value="anadhanam">Anadhanam</option>
+                                  <option value="pradosham">Pradosham</option>
+                                  <option value="shivaratri">Shivaratri</option>
+                                  <option value="other">Other</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {/* Specific Event Selection */}
+                            {donationForm.eventSelectionType === 'specific' && (
+                              <div className="mt-3">
+                                <select
+                                  value={donationForm.specificEvent}
+                                  onChange={(e) => setDonationForm({...donationForm, specificEvent: e.target.value})}
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                >
+                                  <option value="">Select a specific event...</option>
+                                  {events
+                                    .filter(event => event.status !== 'cancelled')
+                                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                                    .map((event) => {
+                                      const eventDate = new Date(event.date);
+                                      const isCompleted = eventDate < new Date() || event.status === 'completed';
+                                      return (
+                                        <option key={event._id} value={event._id}>
+                                          {event.name} - {eventDate.toLocaleDateString()}
+                                          {isCompleted ? ' (Completed)' : ''}
+                                        </option>
+                                      );
+                                    })}
+                                </select>
+                                {donationForm.specificEvent && (
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    💡 You can donate to completed events as late contributions
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Notes */}

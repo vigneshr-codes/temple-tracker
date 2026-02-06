@@ -10,7 +10,8 @@ const {
   generateChallan,
   getAvailableInventory
 } = require('../controllers/expenseController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
@@ -28,21 +29,21 @@ router.use(protect);
 
 // Get available inventory for linking
 router.route('/inventory/available')
-  .get(getAvailableInventory);
+  .get(checkPermission('expenses', 'read'), getAvailableInventory);
 
 router.route('/')
-  .get(getExpenses)
-  .post(expenseValidation, createExpense);
+  .get(checkPermission('expenses', 'read'), getExpenses)
+  .post(checkPermission('expenses', 'create'), expenseValidation, createExpense);
 
 router.route('/:id')
-  .get(getExpense)
-  .put(updateExpense)
-  .delete(authorize('admin'), deleteExpense);
+  .get(checkPermission('expenses', 'read'), getExpense)
+  .put(checkPermission('expenses', 'update'), updateExpense)
+  .delete(checkPermission('expenses', 'delete'), deleteExpense);
 
 router.route('/:id/approve')
-  .put(authorize('admin'), approveExpense);
+  .put(checkPermission('expenses', 'update'), approveExpense);
 
 router.route('/:id/challan')
-  .get(generateChallan);
+  .get(checkPermission('expenses', 'read'), generateChallan);
 
 module.exports = router;

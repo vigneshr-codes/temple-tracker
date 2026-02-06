@@ -27,6 +27,17 @@ const donationSchema = new mongoose.Schema({
       type: String,
       trim: true,
     },
+    panNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Please provide a valid PAN number (e.g., ABCDE1234F)'],
+    },
+    aadhaarNumber: {
+      type: String,
+      trim: true,
+      match: [/^\d{12}$/, 'Please provide a valid 12-digit Aadhaar number'],
+    },
   },
   type: {
     type: String,
@@ -82,6 +93,17 @@ const donationSchema = new mongoose.Schema({
     default: 'general',
   },
   customEvent: String,
+  // NEW: Link to specific created events
+  specificEvent: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Event',
+    default: null,
+  },
+  eventLinkStatus: {
+    type: String,
+    enum: ['general', 'linked-active', 'linked-completed', 'linked-cancelled'],
+    default: 'general',
+  },
   remarks: String,
   receiptGenerated: {
     type: Boolean,

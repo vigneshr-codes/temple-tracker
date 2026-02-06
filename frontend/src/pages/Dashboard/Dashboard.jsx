@@ -1,5 +1,5 @@
 import { useSelector, useDispatch } from 'react-redux';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CurrencyDollarIcon,
@@ -11,7 +11,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { getDonations } from '../../features/donations/donationSlice';
 import { getEvents } from '../../features/events/eventSlice';
+import { getExpenses } from '../../features/expenses/expenseSlice';
 import { canAccessModule } from '../../utils/permissions';
+import { TamilCalendarWidget } from '../../components/TamilCalendar';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -19,13 +21,43 @@ const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const { donations, totalAmount } = useSelector((state) => state.donations);
   const { events } = useSelector((state) => state.events);
+  const { expenses, totalAmount: expenseTotalAmount } = useSelector((state) => state.expenses);
+  const [fundsData, setFundsData] = useState({ totalBalance: 0, fundCount: 0 });
 
   useEffect(() => {
     dispatch(getDonations());
     if (canAccessModule(user, 'events')) {
       dispatch(getEvents());
     }
+    if (canAccessModule(user, 'expenses')) {
+      dispatch(getExpenses());
+    }
+    // Fetch funds data
+    if (user && canAccessModule(user, 'funds')) {
+      fetchFundsData();
+    }
   }, [dispatch, user]);
+
+  const fetchFundsData = async () => {
+    try {
+      const token = localStorage.getItem('temple_token');
+      const response = await fetch('/api/funds', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        const totalBalance = data.summary?.totalBalances?.total || 0;
+        const fundCount = data.summary?.totalFunds || 0;
+        setFundsData({ totalBalance, fundCount });
+      }
+    } catch (error) {
+      console.error('Error fetching funds data:', error);
+    }
+  };
 
   const stats = [
     {
@@ -38,6 +70,15 @@ const Dashboard = () => {
       module: 'donations'
     },
     {
+      name: 'Total Balance',
+      value: `₹${fundsData.totalBalance?.toLocaleString('en-IN') || 0}`,
+      change: `+${fundsData.fundCount} funds`,
+      changeType: 'increase',
+      icon: UserGroupIcon,
+      href: '/funds',
+      module: 'funds'
+    },
+    {
       name: 'Inventory Items',
       value: `${donations.filter(d => d.type === 'in-kind').reduce((acc, d) => acc + (d.items?.length || 0), 0)}`,
       change: `+${donations.filter(d => d.type === 'in-kind').length} donations`,
@@ -48,8 +89,8 @@ const Dashboard = () => {
     },
     {
       name: 'Total Expenses',
-      value: '₹0',
-      change: '+0%',
+      value: `₹${expenseTotalAmount?.toLocaleString('en-IN') || 0}`,
+      change: `+${expenses.length} expenses`,
       changeType: 'increase',
       icon: DocumentTextIcon,
       href: '/expenses',
@@ -193,7 +234,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Quick Actions */}
         <div>
           <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
@@ -224,6 +265,11 @@ const Dashboard = () => {
               ))}
             </ul>
           </div>
+        </div>
+
+        {/* Tamil Calendar */}
+        <div>
+          <TamilCalendarWidget showNavigation={true} />
         </div>
 
         {/* Recent Activity */}

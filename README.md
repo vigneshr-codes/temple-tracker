@@ -10,6 +10,7 @@ A comprehensive temple management system built with the MERN stack, featuring do
 
 ### 💰 Financial Management
 - **Donation Tracking**: Record and categorize donations with receipts
+  - PAN/Aadhaar collection for 80G tax receipts (ITR compliance)
 - **Expense Management**: Track expenses with admin approval workflow
 - **Fund Management**: Manage temple funds and allocations
 - **Financial Reports**: Generate detailed financial reports
@@ -17,7 +18,11 @@ A comprehensive temple management system built with the MERN stack, featuring do
 ### 📦 Operations
 - **Inventory Management**: Track temple assets and supplies
 - **Event Planning**: Organize temple events and ceremonies
-- **User Management**: Role-based access control (Admin, Manager, Volunteer, Viewer)
+- **User Management**: Role-based access control
+  - **Admin**: Full system access
+  - **Manager**: Operational management, limited admin
+  - **Volunteer**: Basic data entry
+  - **Viewer**: Read-only access
 - **Settings Management**: Configure temple preferences and notifications
 
 ### 🔐 Security & Features

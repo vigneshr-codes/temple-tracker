@@ -160,7 +160,12 @@ userSchema.methods.setRolePermissions = function() {
 
 // Set permissions before saving
 userSchema.pre('save', function(next) {
-  if (this.isModified('role')) {
+  // Set permissions if role is modified or if permissions are not set
+  const hasNoPermissions = !this.permissions ||
+    !this.permissions.donations ||
+    Object.keys(this.permissions.donations).every(key => this.permissions.donations[key] === false);
+
+  if (this.isModified('role') || this.isNew || hasNoPermissions) {
     this.setRolePermissions();
   }
   next();

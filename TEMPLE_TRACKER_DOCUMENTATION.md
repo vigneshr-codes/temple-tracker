@@ -37,20 +37,33 @@ temple-tracker/
 3. **Role-based Permissions** → Feature Access
 
 ### **User Roles & Permissions**
-- **Admin**: Full system access, user management, approvals
-- **Manager**: Operational management, reports, limited admin functions
-- **Volunteer**: Basic data entry, limited access
+- **Admin**: Full system access, user management, settings, all CRUD operations
+- **Manager**: Create/Read/Update on most modules, Read-only for funds/users, export reports
+- **Volunteer**: Create/Read donations & expenses, Read-only for other modules
+- **Viewer**: Read-only access to all modules (except users/settings)
+
+### **Permission Matrix**
+| Module | Admin | Manager | Volunteer | Viewer |
+|--------|-------|---------|-----------|--------|
+| Donations | Full CRUD | Create/Read/Update | Create/Read | Read |
+| Inventory | Full CRUD | Create/Read/Update | Create/Read/Update | Read |
+| Expenses | Full CRUD | Create/Read/Update | Create/Read | Read |
+| Funds | Full + Allocate | Read | Read | Read |
+| Events | Full CRUD | Create/Read/Update | Read | Read |
+| Users | Full CRUD | Read | No Access | No Access |
+| Settings | Full Access | No Access | No Access | No Access |
 
 ## **Core Module Flows**
 
 ### **1. Donation Management Flow**
 ```
-Donor Information Entry → Donation Details → Amount & Category → 
+Donor Information Entry → Donation Details → Amount & Category →
 Receipt Generation → Fund Allocation → Notification (Optional)
 ```
 
 **Key Features:**
 - Donor registration and management
+- **PAN/Aadhaar collection** for 80G tax receipts (ITR compliance)
 - Multiple donation categories (General, Special Events, etc.)
 - Receipt generation with unique IDs
 - Fund allocation tracking

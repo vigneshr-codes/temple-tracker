@@ -9,7 +9,8 @@ const {
   getFundReports,
   transferFunds
 } = require('../controllers/fundController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
@@ -38,27 +39,27 @@ router.use(protect);
 
 // Fund management routes
 router.route('/')
-  .get(getFunds)
-  .post(authorize('admin'), fundValidation, createFund);
+  .get(checkPermission('funds', 'read'), getFunds)
+  .post(checkPermission('funds', 'create'), fundValidation, createFund);
 
 // Fund reports
 router.route('/reports')
-  .get(getFundReports);
+  .get(checkPermission('funds', 'read'), getFundReports);
 
 // Fund transfers
 router.route('/transfer')
-  .post(authorize('admin'), transferValidation, transferFunds);
+  .post(checkPermission('funds', 'allocate'), transferValidation, transferFunds);
 
 // Process donation funds
 router.route('/process-donation/:donationId')
-  .post(processDonationFunds);
+  .post(checkPermission('funds', 'update'), processDonationFunds);
 
 // Allocate funds for expense
 router.route('/allocate-expense/:expenseId')
-  .post(authorize('admin'), allocationValidation, allocateExpenseFromFunds);
+  .post(checkPermission('funds', 'allocate'), allocationValidation, allocateExpenseFromFunds);
 
 // Individual fund details
 router.route('/:id')
-  .get(getFund);
+  .get(checkPermission('funds', 'read'), getFund);
 
 module.exports = router;

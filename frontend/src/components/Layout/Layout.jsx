@@ -1,30 +1,36 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
 import { logout, getMe } from "../../features/auth/authSlice";
 import { toggleSidebar } from "../../features/ui/uiSlice";
 import { addNotification } from "../../features/ui/uiSlice";
 import { HomeIcon, CurrencyDollarIcon, ArchiveBoxIcon, DocumentTextIcon, BanknotesIcon, CalendarDaysIcon, ChartBarIcon, Cog6ToothIcon, UserGroupIcon, Bars3Icon, XMarkIcon, ArrowRightOnRectangleIcon, QrCodeIcon } from "@heroicons/react/24/outline";
 import { NavLink } from "react-router-dom";
 import QRScanner from "../QRScanner/QRScanner";
+import LanguageSwitcher from "../LanguageSwitcher";
 import { canAccessModule } from "../../utils/permissions";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: HomeIcon, module: null }, // No permission required for dashboard
-  { name: "Donations", href: "/donations", icon: CurrencyDollarIcon, module: "donations" },
-  { name: "Inventory", href: "/inventory", icon: ArchiveBoxIcon, module: "inventory" },
-  { name: "Expenses", href: "/expenses", icon: DocumentTextIcon, module: "expenses" },
-  { name: "Funds", href: "/funds", icon: BanknotesIcon, module: "funds" },
-  { name: "Events", href: "/events", icon: CalendarDaysIcon, module: "events" },
-  { name: "Reports", href: "/reports", icon: ChartBarIcon, module: "reports" },
-  { name: "Settings", href: "/settings", icon: Cog6ToothIcon, module: null } // No permission required for settings
+  { nameKey: "navigation.dashboard", href: "/", icon: HomeIcon, module: null }, // No permission required for dashboard
+  { nameKey: "navigation.donations", href: "/donations", icon: CurrencyDollarIcon, module: "donations" },
+  { nameKey: "navigation.inventory", href: "/inventory", icon: ArchiveBoxIcon, module: "inventory" },
+  { nameKey: "navigation.expenses", href: "/expenses", icon: DocumentTextIcon, module: "expenses" },
+  { nameKey: "navigation.funds", href: "/funds", icon: BanknotesIcon, module: "funds" },
+  { nameKey: "navigation.events", href: "/events", icon: CalendarDaysIcon, module: "events" }
+  // { nameKey: "navigation.reports", href: "/reports", icon: ChartBarIcon, module: "reports" } // Hidden for now
 ];
 
-const adminNavigation = [{ name: "Users", href: "/users", icon: UserGroupIcon, module: "users" }];
+// Admin-only navigation items
+const adminNavigation = [
+  { nameKey: "navigation.users", href: "/users", icon: UserGroupIcon, module: "users" },
+  { nameKey: "navigation.settings", href: "/settings", icon: Cog6ToothIcon, module: null }
+];
 
 const Layout = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { user } = useSelector(state => state.auth);
   const { sidebarOpen } = useSelector(state => state.ui);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
@@ -65,25 +71,15 @@ const Layout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, user?.id]);
 
-  // Debug logging
-  console.log("Layout Debug - User object:", user);
-  console.log("Layout Debug - User permissions:", user?.permissions);
-  console.log("Layout Debug - User role:", user?.role);
-
   // Filter navigation based on user permissions
   const filteredNavigation = navigation.filter(item => {
-    const hasAccess = !item.module || canAccessModule(user, item.module);
-    console.log(`Layout Debug - ${item.name} (${item.module}): ${hasAccess}`);
-    return hasAccess;
+    return !item.module || canAccessModule(user, item.module);
   });
 
-  const filteredAdminNavigation = user?.role === "admin" ? adminNavigation.filter(item => !item.module || canAccessModule(user, item.module)) : [];
+  // Admin-only navigation (users, settings)
+  const filteredAdminNavigation = user?.role === "admin" ? adminNavigation : [];
 
   const allNavigation = [...filteredNavigation, ...filteredAdminNavigation];
-  console.log(
-    "Layout Debug - Final navigation items:",
-    allNavigation.map(n => n.name)
-  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -110,9 +106,9 @@ const Layout = () => {
           <div className="mt-5 flex-1 h-0 overflow-y-auto">
             <nav className="px-2 space-y-1">
               {allNavigation.map(item => (
-                <NavLink key={item.name} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
+                <NavLink key={item.nameKey} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
                   <item.icon className="mr-3 flex-shrink-0 h-6 w-6" />
-                  {item.name}
+                  {t(item.nameKey)}
                 </NavLink>
               ))}
             </nav>
@@ -135,9 +131,9 @@ const Layout = () => {
           <div className="mt-8 flex-1 flex flex-col">
             <nav className="flex-1 px-2 space-y-1">
               {allNavigation.map(item => (
-                <NavLink key={item.name} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
+                <NavLink key={item.nameKey} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
                   <item.icon className="mr-3 flex-shrink-0 h-6 w-6" />
-                  {item.name}
+                  {t(item.nameKey)}
                 </NavLink>
               ))}
             </nav>
@@ -158,6 +154,8 @@ const Layout = () => {
             </div>
 
             <div className="ml-4 flex items-center space-x-4">
+              <LanguageSwitcher />
+              
               <div className="flex items-center space-x-2">
                 <div className="h-8 w-8 bg-gradient-to-br from-saffron-500 to-temple-500 rounded-full flex items-center justify-center">
                   <span className="text-sm font-medium text-white">{user?.name?.charAt(0)}</span>

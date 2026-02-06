@@ -88,9 +88,15 @@ const logout = () => {
   localStorage.removeItem('temple_user');
 };
 
-// Get current user
+// Get current user and update localStorage with latest data
 const getMe = async () => {
   const response = await api.get('/auth/me');
+
+  // Update localStorage with latest user data (including permissions)
+  if (response.data && response.data.data) {
+    localStorage.setItem('temple_user', JSON.stringify(response.data.data));
+  }
+
   return response.data;
 };
 

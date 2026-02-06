@@ -9,7 +9,8 @@ const {
   generateReceipt,
   sendDonationNotification
 } = require('../controllers/donationController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { checkPermission } = require('../middleware/permissions');
 
 const router = express.Router();
 
@@ -28,18 +29,18 @@ const donationValidation = [
 router.use(protect);
 
 router.route('/')
-  .get(getDonations)
-  .post(donationValidation, createDonation);
+  .get(checkPermission('donations', 'read'), getDonations)
+  .post(checkPermission('donations', 'create'), donationValidation, createDonation);
 
 router.route('/:id')
-  .get(getDonation)
-  .put(authorize('admin'), updateDonation)
-  .delete(authorize('admin'), deleteDonation);
+  .get(checkPermission('donations', 'read'), getDonation)
+  .put(checkPermission('donations', 'update'), updateDonation)
+  .delete(checkPermission('donations', 'delete'), deleteDonation);
 
 router.route('/:id/receipt')
-  .post(generateReceipt);
+  .post(checkPermission('donations', 'read'), generateReceipt);
 
 router.route('/:id/notification')
-  .post(sendDonationNotification);
+  .post(checkPermission('donations', 'read'), sendDonationNotification);
 
 module.exports = router;
