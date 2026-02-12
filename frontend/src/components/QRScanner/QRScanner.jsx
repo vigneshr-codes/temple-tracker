@@ -3,6 +3,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { Fragment } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { XMarkIcon, CameraIcon, ExclamationTriangleIcon, CheckCircleIcon, ClockIcon, TagIcon, UserIcon, CalendarIcon, CubeIcon, QrCodeIcon } from "@heroicons/react/24/outline";
+import authService from "../../services/authService";
 
 const QRScanner = ({ isOpen, onClose, onScanSuccess: onScanSuccessCallback, onScanError: onScanErrorCallback }) => {
   const [isScanning, setIsScanning] = useState(false);
@@ -106,41 +107,12 @@ const QRScanner = ({ isOpen, onClose, onScanSuccess: onScanSuccessCallback, onSc
         return;
       }
 
-      const token = localStorage.getItem("temple_token");
-      console.log("Token check:", token ? "Token found" : "No token found");
+      console.log("About to make API call to scan inventory item");
 
-      if (!token) {
-        console.log("No token - setting auth error");
-        setError("Please login to scan QR codes. Close this scanner and login first.");
-        setIsLoading(false);
-        // Don't redirect automatically, let user close the scanner
-        return;
-      }
-
-      console.log("Using token:", token ? "Token present" : "No token");
-      console.log("About to make API call to:", `http://localhost:3001/api/inventory/scan/${encodeURIComponent(decodedText)}`);
-
-      const response = await fetch(`http://localhost:3001/api/inventory/scan/${encodeURIComponent(decodedText)}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (response.status === 401) {
-        setError("Authentication expired. Please login again and try scanning.");
-        setIsLoading(false);
-        // Don't redirect automatically, let user close the scanner
-        return;
-      }
-
-      const data = await response.json();
+      const { data } = await authService.api.get(`/inventory/scan/${encodeURIComponent(decodedText)}`);
       console.log("API response:", data);
-      console.log("Response status:", response.status);
-      console.log("Response ok:", response.ok);
 
-      if (response.ok && data.success) {
+      if (data.success) {
         console.log("Setting scanned item:", data.data);
         setScannedItem(data.data);
         setShowItemDetails(true);
@@ -153,8 +125,12 @@ const QRScanner = ({ isOpen, onClose, onScanSuccess: onScanSuccessCallback, onSc
       }
     } catch (error) {
       console.error("Scan API error:", error);
-      setError("Failed to scan QR code. Please try again.");
-      onScanErrorCallback?.("Failed to scan QR code");
+      if (error.response?.status === 401) {
+        setError("Authentication expired. Please login again and try scanning.");
+      } else {
+        setError("Failed to scan QR code. Please try again.");
+        onScanErrorCallback?.("Failed to scan QR code");
+      }
     } finally {
       setIsLoading(false);
     }

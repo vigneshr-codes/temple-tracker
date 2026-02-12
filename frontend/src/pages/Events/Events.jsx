@@ -286,7 +286,7 @@ const Events = () => {
         </select>
 
         <select
-          className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm focus:border-temple-500 focus:outline-none focus:ring-temple-500"
+          className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm focus:border-temple-500 focus:outline-none focus:ring-temple-500 min-w-[120px]"
           value={filters.status}
           onChange={(e) => setFilters({...filters, status: e.target.value})}
         >

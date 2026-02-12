@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { addNotification } from '../../features/ui/uiSlice';
 import { getEvents } from '../../features/events/eventSlice';
+import { BACKEND_STATIC_URL } from '../../features/settings/settingsSlice';
+import authService from '../../services/authService';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
 import {
   PlusIcon,
@@ -14,8 +16,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   XCircleIcon,
-  PencilIcon,
-  TrashIcon,
+  // PencilIcon,  // TODO: implement edit expense
+  // TrashIcon,   // TODO: implement delete expense
   EyeIcon,
   LinkIcon,
   PrinterIcon,
@@ -92,15 +94,7 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
 
   const fetchAvailableFunds = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/funds', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
+      const { data } = await authService.api.get('/funds');
       if (data.success) {
         setAvailableFunds(data.data);
         if (data.summary) {
@@ -130,8 +124,6 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('temple_token');
-      
       // If paying immediately, check fund balance
       if (expenseForm.payImmediately) {
         const availableBalance = getAvailableBalance(expenseForm.fundCategory, expenseForm.paymentMethod);
@@ -164,35 +156,17 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
         // Keep paymentMethod as it's required by backend validation
       }
 
-      const response = await fetch('/api/expenses', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(expenseData)
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.post('/expenses', expenseData);
       
       if (data.success) {
         const expenseId = data.data._id;
         
         // If paying immediately, allocate from fund
         if (expenseForm.payImmediately) {
-          const fundResponse = await fetch(`/api/funds/allocate-expense/${expenseId}`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              fundCategory: expenseForm.fundCategory,
-              paymentMethod: expenseForm.paymentMethod
-            })
+          const { data: fundData } = await authService.api.post(`/funds/allocate-expense/${expenseId}`, {
+            fundCategory: expenseForm.fundCategory,
+            paymentMethod: expenseForm.paymentMethod
           });
-
-          const fundData = await fundResponse.json();
           
           if (fundData.success) {
             dispatch(addNotification({
@@ -554,6 +528,8 @@ const AddExpenseModal = ({ onClose, onSuccess }) => {
 const Expenses = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { templeConfig } = useSelector((state) => state.settings);
+  const logoUrl = templeConfig?.logo ? `${BACKEND_STATIC_URL}${templeConfig.logo}` : null;
   
   // Check if user has access to the expenses module
   if (!canAccessModule(user, 'expenses')) {
@@ -649,12 +625,6 @@ const Expenses = () => {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('temple_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       // Build query parameters
       const queryParams = new URLSearchParams({
         page: pagination.current.toString(),
@@ -668,14 +638,7 @@ const Expenses = () => {
         }
       });
 
-      const response = await fetch(`http://localhost:3001/api/expenses?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get(`/expenses?${queryParams}`);
 
       if (data.success) {
         // Filter by search term on frontend (for now)
@@ -746,15 +709,7 @@ const Expenses = () => {
 
   const fetchAvailableFunds = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/funds', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
+      const { data } = await authService.api.get('/funds');
       if (data.success) {
         setAvailableFunds(data.data);
       }
@@ -765,15 +720,7 @@ const Expenses = () => {
 
   const fetchAvailableInventory = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/expenses/inventory/available', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get('/expenses/inventory/available');
       if (data.success) {
         setAvailableInventory(data.data);
       } else {
@@ -786,15 +733,7 @@ const Expenses = () => {
 
   const generateChallan = async (expenseId) => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/expenses/${expenseId}/challan`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get(`/expenses/${expenseId}/challan`);
       if (data.success) {
         setChallanData(data.data);
         setShowChallanModal(true);
@@ -807,30 +746,262 @@ const Expenses = () => {
     }
   };
 
-  const printChallan = () => {
-    const printContent = document.getElementById('challan-content');
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Challan - ${challanData?.challanNumber}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .details { margin: 20px 0; }
-            .table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            .table th { background-color: #f2f2f2; }
-            @media print { button { display: none; } }
-          </style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+  const printChallan = async () => {
+    if (!challanData) return;
+    const tc = templeConfig || {};
+
+    // Fetch logo as data URL so it works inside the blob popup
+    let logoDataUrl = null;
+    if (tc.logo) {
+      try {
+        const resp = await fetch(`${BACKEND_STATIC_URL}${tc.logo}`);
+        const blob = await resp.blob();
+        logoDataUrl = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch { /* proceed without logo */ }
+    }
+    const addr = tc.address || {};
+    const exp = challanData.expense || {};
+    const vendor = exp.vendor || {};
+
+    // Amount in words
+    const ONES = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+    const TENS = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    function n2w(n) {
+      if (!n || n === 0) return '';
+      if (n < 20) return ONES[n];
+      if (n < 100) return TENS[Math.floor(n/10)] + (n%10 ? ' '+ONES[n%10] : '');
+      if (n < 1000) return ONES[Math.floor(n/100)]+' Hundred'+(n%100 ? ' '+n2w(n%100) : '');
+      if (n < 100000) return n2w(Math.floor(n/1000))+' Thousand'+(n%1000 ? ' '+n2w(n%1000) : '');
+      if (n < 10000000) return n2w(Math.floor(n/100000))+' Lakh'+(n%100000 ? ' '+n2w(n%100000) : '');
+      return n2w(Math.floor(n/10000000))+' Crore'+(n%10000000 ? ' '+n2w(n%10000000) : '');
+    }
+    const amtWords = 'Rupees ' + n2w(Math.floor(challanData.totalAmount || 0)) + ' Only';
+    const amtFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(challanData.totalAmount || 0);
+
+    const addressLine = [addr.street, addr.city, addr.state].filter(Boolean).join(', ');
+    const pincode = addr.pincode ? ` - ${addr.pincode}` : '';
+    const phone = tc.contact?.phone || '';
+    const email = tc.contact?.email || '';
+
+    const eventLabel = exp.event === 'custom' ? (exp.customEvent || 'Custom') : (eventOptions.find(e => e.value === exp.event)?.label || exp.event || '—');
+    const categoryLabel = categoryOptions.find(o => o.value === exp.category)?.label || exp.category || '—';
+    const billDate = exp.billDate ? new Date(exp.billDate).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const genDate = challanData.generatedDate ? new Date(challanData.generatedDate).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+    const regPanLine = [
+      tc.registrationNumber ? `Regn No.: ${tc.registrationNumber}` : '',
+      tc.panNumber ? `PAN: ${tc.panNumber}` : ''
+    ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
+
+    const linkedRowsHTML = (challanData.linkedItems || []).map((item, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${item.inventoryId?.inventoryId || '—'}</td>
+        <td>${item.inventoryId?.itemType || '—'}</td>
+        <td>${item.description || item.inventoryId?.description || '—'}</td>
+        <td style="text-align:center;">${item.inventoryId?.quantity || '—'} ${item.inventoryId?.unit || ''}</td>
+        <td>${item.inventoryId?.donor?.name || '—'}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Expense Challan - ${challanData.challanNumber}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,sans-serif;padding:20px;color:#111;font-size:12px;}
+    .no-print{text-align:center;margin-bottom:14px;}
+    .btn{padding:8px 22px;font-size:13px;border:none;border-radius:5px;cursor:pointer;margin-right:8px;}
+    .btn-print{background:#b45309;color:#fff;}
+    .btn-close{background:#6b7280;color:#fff;}
+
+    .challan{border:2px solid #333;width:100%;}
+
+    /* Gold stripe */
+    .ch-stripe{height:5px;background:linear-gradient(90deg,#d97706,#f59e0b,#fbbf24,#f59e0b,#d97706);}
+
+    /* Header */
+    .ch-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 14px;border-bottom:1px solid #e5e7eb;gap:16px;}
+    .ch-text{flex:1;}
+    .ch-name{font-size:15px;font-weight:800;color:#111827;line-height:1.4;margin-bottom:4px;}
+    .ch-name span{display:block;white-space:nowrap;}
+    .ch-sub{font-size:10px;color:#6b7280;margin:2px 0;}
+    .ch-ids{font-size:9px;color:#9ca3af;margin-top:4px;}
+    .ch-logo-box{flex-shrink:0;width:88px;height:88px;border-radius:50%;overflow:hidden;border:2px solid #fde68a;box-shadow:0 0 0 4px #fffbeb;background:#fffbeb;display:flex;align-items:center;justify-content:center;}
+    .ch-logo-box img{width:88px;height:88px;object-fit:contain;}
+
+    /* Voucher label */
+    .ch-label{text-align:center;padding:8px;border-bottom:1px solid #e5e7eb;background:linear-gradient(135deg,#92400e,#b45309,#92400e);}
+    .ch-label span{font-size:13px;font-weight:bold;letter-spacing:6px;color:#fef3c7;text-shadow:0 1px 2px rgba(0,0,0,0.3);}
+
+    /* Challan no + date bar */
+    .ch-meta{display:flex;justify-content:space-between;padding:7px 14px;border-bottom:1px solid #ccc;background:#fafafa;}
+    .ch-meta .meta-item{font-size:11px;}
+    .ch-meta .meta-label{color:#777;font-size:9px;display:block;}
+    .ch-meta .meta-val{font-weight:700;font-size:12px;}
+
+    /* Sections */
+    .ch-body{padding:12px 14px;}
+    .section{margin-bottom:12px;}
+    .section-title{font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#555;border-bottom:1px solid #e5e7eb;padding-bottom:3px;margin-bottom:6px;}
+    .info-table{width:100%;border-collapse:collapse;}
+    .info-table td{padding:4px 6px;font-size:11px;vertical-align:top;}
+    .info-table td:first-child{width:32%;color:#6b7280;white-space:nowrap;}
+    .info-table td:last-child{font-weight:600;color:#111;}
+    .info-table tr{border-bottom:1px dotted #e5e7eb;}
+
+    /* Amount box */
+    .amount-box{border:1px solid #d1d5db;border-radius:4px;padding:10px 14px;background:#fffbeb;}
+    .amount-words{font-style:italic;font-size:11px;color:#444;margin-bottom:6px;}
+    .amount-figure{text-align:right;font-size:18px;font-weight:bold;color:#92400e;}
+
+    /* Linked items */
+    .items-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;}
+    .items-table th{background:#f3f4f6;border:1px solid #d1d5db;padding:5px 8px;text-align:left;font-size:10px;font-weight:700;}
+    .items-table td{border:1px solid #e5e7eb;padding:5px 8px;vertical-align:top;}
+    .items-table tr:nth-child(even) td{background:#f9fafb;}
+
+    /* Footer */
+    .ch-footer{border-top:1.5px solid #333;padding:12px 14px;}
+    .sig-row{display:flex;justify-content:space-between;margin-top:28px;}
+    .sig-box{text-align:center;min-width:140px;}
+    .sig-line{border-top:1px solid #555;padding-top:4px;font-size:10px;}
+    .gen-note{font-size:9px;color:#888;margin-top:10px;}
+
+    @media print{
+      @page{margin:5mm;}
+      body{padding:0;}
+      .no-print{display:none!important;}
+      .challan{page-break-inside:avoid;}
+      .ch-stripe{height:3px;}
+      .ch-header{padding:8px 14px 6px;}
+      .ch-logo-box{width:64px;height:64px;box-shadow:none;}
+      .ch-logo-box img{width:64px;height:64px;}
+      .ch-name{font-size:12px;}
+      .ch-label{padding:5px;}
+      .ch-label span{font-size:11px;}
+      .ch-meta{padding:4px 14px;}
+      .ch-body{padding:6px 12px;}
+      .section{margin-bottom:6px;}
+      .amount-box{padding:6px 10px;}
+      .ch-footer{padding:6px 14px;}
+      .sig-row{margin-top:20px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button class="btn btn-print" onclick="window.print()">Print Challan</button>
+    <button class="btn btn-close" onclick="window.close()">Close</button>
+  </div>
+
+  <div class="challan">
+    <div class="ch-stripe"></div>
+    <!-- Header: name/address left, logo right -->
+    <div class="ch-header">
+      <div class="ch-text">
+        <div class="ch-name">${(tc.name || 'Temple').split('|').map(p => `<span>${p}</span>`).join('')}</div>
+        ${addressLine ? `<div class="ch-sub">${addressLine}${pincode}</div>` : ''}
+        ${(phone || email) ? `<div class="ch-sub">${[phone ? 'Ph: '+phone : '', email ? 'Email: '+email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</div>` : ''}
+        ${regPanLine ? `<div class="ch-ids">${regPanLine}</div>` : ''}
+      </div>
+      ${logoDataUrl ? `<div class="ch-logo-box"><img src="${logoDataUrl}" alt="logo"></div>` : ''}
+    </div>
+
+    <!-- Voucher label -->
+    <div class="ch-label"><span>EXPENSE VOUCHER</span></div>
+
+    <!-- Challan No + Date -->
+    <div class="ch-meta">
+      <div class="meta-item">
+        <span class="meta-label">Challan No.</span>
+        <span class="meta-val">${challanData.challanNumber}</span>
+      </div>
+      <div class="meta-item" style="text-align:right;">
+        <span class="meta-label">Generated Date</span>
+        <span class="meta-val">${genDate}</span>
+      </div>
+    </div>
+
+    <div class="ch-body">
+      <!-- Expense + Vendor side by side -->
+      <div style="display:flex;gap:16px;margin-bottom:12px;">
+        <div style="flex:1;">
+          <div class="section-title">Expense Details</div>
+          <table class="info-table">
+            <tr><td>Expense ID</td><td>${exp.expenseId || '—'}</td></tr>
+            <tr><td>Category</td><td>${categoryLabel}</td></tr>
+            <tr><td>Description</td><td>${exp.description || '—'}</td></tr>
+            <tr><td>Bill Date</td><td>${billDate}</td></tr>
+            <tr><td>Event</td><td>${eventLabel}</td></tr>
+            <tr><td>Payment Mode</td><td>${exp.paymentMethod || '—'}</td></tr>
+          </table>
+        </div>
+        <div style="flex:1;">
+          <div class="section-title">Vendor Details</div>
+          <table class="info-table">
+            <tr><td>Name</td><td>${vendor.name || '—'}</td></tr>
+            ${vendor.contact ? `<tr><td>Contact</td><td>${vendor.contact}</td></tr>` : ''}
+            ${vendor.address ? `<tr><td>Address</td><td>${vendor.address}</td></tr>` : ''}
+            ${exp.createdBy?.name ? `<tr><td>Prepared by</td><td>${exp.createdBy.name}</td></tr>` : ''}
+            ${exp.approvedBy?.name ? `<tr><td>Approved by</td><td>${exp.approvedBy.name}</td></tr>` : ''}
+          </table>
+        </div>
+      </div>
+
+      <!-- Amount -->
+      <div class="section">
+        <div class="section-title">Amount</div>
+        <div class="amount-box">
+          <div class="amount-words">In Words: <em>${amtWords}</em></div>
+          <div class="amount-figure">Total: ${amtFmt}</div>
+        </div>
+      </div>
+
+      ${(challanData.linkedItems && challanData.linkedItems.length > 0) ? `
+      <!-- Linked Inventory -->
+      <div class="section">
+        <div class="section-title">Linked Inventory Items</div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Inventory ID</th><th>Item</th>
+              <th>Description</th><th>Quantity</th><th>Donor</th>
+            </tr>
+          </thead>
+          <tbody>${linkedRowsHTML}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${exp.notes ? `
+      <div class="section">
+        <div class="section-title">Notes</div>
+        <p style="font-size:11px;color:#444;">${exp.notes}</p>
+      </div>` : ''}
+    </div>
+
+    <!-- Footer -->
+    <div class="ch-footer">
+      <div class="sig-row">
+        <div class="sig-box"><div class="sig-line">Prepared by</div></div>
+        <div class="sig-box"><div class="sig-line">Verified by</div></div>
+        <div class="sig-box"><div class="sig-line">Authorised Signatory</div></div>
+      </div>
+      <div class="gen-note">Generated on ${genDate} &nbsp;|&nbsp; ${tc.name || 'Temple'}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'width=900,height=800');
+    win?.addEventListener('load', () => URL.revokeObjectURL(url));
   };
 
   const getCategoryLabel = (category) => {
@@ -855,20 +1026,10 @@ const Expenses = () => {
 
   const handleApproveExpense = async (expenseId, status) => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/expenses/${expenseId}/approve`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          status,
-          remarks: status === 'approved' ? 'Approved by admin' : 'Rejected by admin'
-        })
+      const { data } = await authService.api.put(`/expenses/${expenseId}/approve`, {
+        status,
+        remarks: status === 'approved' ? 'Approved by admin' : 'Rejected by admin'
       });
-
-      const data = await response.json();
       if (data.success) {
         // Refresh expenses list
         fetchExpenses();
@@ -1246,6 +1407,7 @@ const Expenses = () => {
                                   </button>
                                 </>
                               )}
+                              {/* TODO: implement edit & delete expense
                               {hasPermission(user, 'expenses', 'update') && (expense.createdBy?._id === user?._id || user?.role === 'admin') && expense.status !== 'approved' && (
                                 <button
                                   className="text-blue-600 hover:text-blue-900"
@@ -1261,7 +1423,7 @@ const Expenses = () => {
                                 >
                                   <TrashIcon className="h-4 w-4" />
                                 </button>
-                              )}
+                              )} */}
                             </div>
                           </td>
                         </tr>
@@ -1541,78 +1703,152 @@ const Expenses = () => {
                 </div>
               </div>
 
-              <div id="challan-content" className="bg-white p-6">
-                <div className="header text-center mb-8">
-                  <h1 className="text-2xl font-bold text-gray-900">Temple Management System</h1>
-                  <h2 className="text-xl font-semibold text-gray-700 mt-2">Expense Challan</h2>
-                  <p className="text-sm text-gray-600 mt-1">Challan No: {challanData.challanNumber}</p>
+              {/* Challan Preview */}
+              <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden shadow-md">
+                {/* Gold top stripe */}
+                <div style={{ height: '5px', background: 'linear-gradient(90deg, #d97706, #f59e0b, #fbbf24, #f59e0b, #d97706)' }} />
+
+                {/* Temple Header — name/address left, logo right */}
+                <div className="bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h1 className="font-extrabold text-gray-900 leading-snug" style={{ fontSize: '16px' }}>
+                      {(templeConfig?.name || 'Temple').split('|').map((line, i) => (
+                        <span key={i} style={{ display: 'block', whiteSpace: 'nowrap' }}>{line}</span>
+                      ))}
+                    </h1>
+                    {templeConfig?.address?.city && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {[templeConfig.address.street, templeConfig.address.city, templeConfig.address.state].filter(Boolean).join(', ')}
+                        {templeConfig.address.pincode ? ` - ${templeConfig.address.pincode}` : ''}
+                      </p>
+                    )}
+                    {templeConfig?.registrationNumber && (
+                      <p className="text-xs text-gray-400 mt-0.5">Regn: {templeConfig.registrationNumber}</p>
+                    )}
+                  </div>
+                  {logoUrl && (
+                    <div className="flex-shrink-0 rounded-full overflow-hidden border-2 border-amber-300 shadow" style={{ width: 88, height: 88, background: '#fffbeb', boxShadow: '0 0 0 4px #fffbeb, 0 0 0 6px #fde68a' }}>
+                      <img src={logoUrl} alt="logo" style={{ width: 88, height: 88, objectFit: 'contain' }} />
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                  <div className="details">
-                    <h3 className="font-semibold text-gray-900 mb-3">Expense Details</h3>
-                    <p><span className="font-medium">Expense ID:</span> {challanData.expense.expenseId}</p>
-                    <p><span className="font-medium">Category:</span> {getCategoryLabel(challanData.expense.category)}</p>
-                    <p><span className="font-medium">Description:</span> {challanData.expense.description}</p>
-                    <p><span className="font-medium">Amount:</span> {formatCurrency(challanData.expense.amount)}</p>
-                    <p><span className="font-medium">Bill Date:</span> {formatDate(challanData.expense.billDate)}</p>
-                  </div>
-                  <div className="details">
-                    <h3 className="font-semibold text-gray-900 mb-3">Vendor Details</h3>
-                    <p><span className="font-medium">Name:</span> {challanData.expense.vendor.name}</p>
-                    {challanData.expense.vendor.contact && (
-                      <p><span className="font-medium">Contact:</span> {challanData.expense.vendor.contact}</p>
-                    )}
-                    {challanData.expense.vendor.address && (
-                      <p><span className="font-medium">Address:</span> {challanData.expense.vendor.address}</p>
-                    )}
-                    <p><span className="font-medium">Payment Method:</span> {challanData.expense.paymentMethod}</p>
-                    <p><span className="font-medium">Event:</span> {challanData.expense.event === 'custom' ? challanData.expense.customEvent : eventOptions.find(e => e.value === challanData.expense.event)?.label}</p>
-                  </div>
+                {/* EXPENSE VOUCHER label */}
+                <div className="py-2 text-center" style={{ background: 'linear-gradient(135deg, #92400e, #b45309, #92400e)' }}>
+                  <span className="text-sm font-bold tracking-widest" style={{ color: '#fef3c7', letterSpacing: '6px', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>EXPENSE VOUCHER</span>
                 </div>
 
-                {challanData.linkedItems && challanData.linkedItems.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="font-semibold text-gray-900 mb-3">Linked Inventory Items</h3>
-                    <div className="overflow-x-auto">
-                      <table className="table min-w-full">
-                        <thead>
-                          <tr>
-                            <th className="font-semibold text-left">Inventory ID</th>
-                            <th className="font-semibold text-left">Item Type</th>
-                            <th className="font-semibold text-left">Description</th>
-                            <th className="font-semibold text-left">Quantity</th>
-                            <th className="font-semibold text-left">Unit</th>
-                            <th className="font-semibold text-left">Donor</th>
-                          </tr>
-                        </thead>
+                {/* Challan No + Date */}
+                <div className="flex justify-between items-center px-6 py-2 bg-white border-b border-gray-100 text-sm">
+                  <div><span className="text-gray-400 text-xs">Challan No. </span><span className="font-bold text-gray-900">{challanData.challanNumber}</span></div>
+                  <div><span className="text-gray-400 text-xs">Date </span><span className="font-bold text-gray-900">{formatDate(challanData.generatedDate)}</span></div>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  {/* Expense + Vendor */}
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                      <p className="text-xs font-bold tracking-wider text-gray-400 uppercase mb-2 border-b border-gray-100 pb-1">Expense Details</p>
+                      <table className="w-full text-sm">
                         <tbody>
-                          {challanData.linkedItems.map((item, index) => (
-                            <tr key={index}>
-                              <td>{item.inventoryId?.inventoryId || 'N/A'}</td>
-                              <td>{item.inventoryId?.itemType || 'N/A'}</td>
-                              <td>{item.description || item.inventoryId?.description || '-'}</td>
-                              <td>{item.inventoryId?.quantity || '-'}</td>
-                              <td>{item.inventoryId?.unit || '-'}</td>
-                              <td>{item.inventoryId?.donor?.name || '-'}</td>
+                          {[
+                            ['Expense ID', challanData.expense.expenseId],
+                            ['Category', getCategoryLabel(challanData.expense.category)],
+                            ['Description', challanData.expense.description],
+                            ['Bill Date', formatDate(challanData.expense.billDate)],
+                            ['Event', challanData.expense.event === 'custom' ? challanData.expense.customEvent : eventOptions.find(e => e.value === challanData.expense.event)?.label],
+                            ['Payment Mode', challanData.expense.paymentMethod],
+                          ].map(([label, val]) => val ? (
+                            <tr key={label}>
+                              <td className="py-1 pr-3 text-gray-400 text-xs whitespace-nowrap">{label}</td>
+                              <td className="py-1 font-medium text-gray-900 capitalize">{val}</td>
                             </tr>
-                          ))}
+                          ) : null)}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold tracking-wider text-gray-400 uppercase mb-2 border-b border-gray-100 pb-1">Vendor Details</p>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {[
+                            ['Name', challanData.expense.vendor?.name],
+                            ['Contact', challanData.expense.vendor?.contact],
+                            ['Address', challanData.expense.vendor?.address],
+                            ['Prepared by', challanData.expense.createdBy?.name],
+                            ['Approved by', challanData.expense.approvedBy?.name],
+                          ].map(([label, val]) => val ? (
+                            <tr key={label}>
+                              <td className="py-1 pr-3 text-gray-400 text-xs whitespace-nowrap">{label}</td>
+                              <td className="py-1 font-medium text-gray-900">{val}</td>
+                            </tr>
+                          ) : null)}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                )}
 
-                <div className="border-t pt-4 mt-6">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-gray-600">Generated on: {formatDate(challanData.generatedDate)}</p>
-                      <p className="text-sm text-gray-600">Generated by: {user?.name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-semibold">Total Amount: {formatCurrency(challanData.totalAmount)}</p>
-                    </div>
+                  {/* Amount */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 flex items-center justify-between">
+                    <p className="text-xs italic text-amber-700">In Words: {(() => {
+                      const ONES = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+                      const TENS = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+                      function n2w(n) {
+                        if (!n||n===0) return '';
+                        if (n<20) return ONES[n];
+                        if (n<100) return TENS[Math.floor(n/10)]+(n%10?' '+ONES[n%10]:'');
+                        if (n<1000) return ONES[Math.floor(n/100)]+' Hundred'+(n%100?' '+n2w(n%100):'');
+                        if (n<100000) return n2w(Math.floor(n/1000))+' Thousand'+(n%1000?' '+n2w(n%1000):'');
+                        if (n<10000000) return n2w(Math.floor(n/100000))+' Lakh'+(n%100000?' '+n2w(n%100000):'');
+                        return n2w(Math.floor(n/10000000))+' Crore'+(n%10000000?' '+n2w(n%10000000):'');
+                      }
+                      return 'Rupees ' + n2w(Math.floor(challanData.totalAmount || 0)) + ' Only';
+                    })()}</p>
+                    <p className="text-xl font-bold text-amber-800">{formatCurrency(challanData.totalAmount)}</p>
                   </div>
+
+                  {/* Linked inventory */}
+                  {challanData.linkedItems && challanData.linkedItems.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold tracking-wider text-gray-400 uppercase mb-2 border-b border-gray-100 pb-1">Linked Inventory Items</p>
+                      <div className="overflow-x-auto rounded border border-gray-200">
+                        <table className="min-w-full text-sm divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              {['#','Inventory ID','Item','Description','Quantity','Donor'].map(h => (
+                                <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {challanData.linkedItems.map((item, i) => (
+                              <tr key={i}>
+                                <td className="px-3 py-2 text-gray-500">{i+1}</td>
+                                <td className="px-3 py-2 font-medium">{item.inventoryId?.inventoryId || '—'}</td>
+                                <td className="px-3 py-2">{item.inventoryId?.itemType || '—'}</td>
+                                <td className="px-3 py-2 text-gray-500">{item.description || item.inventoryId?.description || '—'}</td>
+                                <td className="px-3 py-2">{item.inventoryId?.quantity || '—'} {item.inventoryId?.unit || ''}</td>
+                                <td className="px-3 py-2">{item.inventoryId?.donor?.name || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {challanData.expense.notes && (
+                    <div>
+                      <p className="text-xs font-bold tracking-wider text-gray-400 uppercase mb-1">Notes</p>
+                      <p className="text-sm text-gray-600">{challanData.expense.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-gray-200 px-6 py-3 bg-white flex justify-between items-center">
+                  <p className="text-xs text-gray-400">Generated on {formatDate(challanData.generatedDate)} by {user?.name}</p>
+                  <p className="text-xs text-gray-400">{templeConfig?.name?.replace(/\|/g, ' ')}</p>
                 </div>
               </div>
             </div>

@@ -9,6 +9,7 @@ const initialState = {
   message: '',
   totalCount: 0,
   totalAmount: 0,
+  typeCounts: {},
 };
 
 // Create donation
@@ -89,8 +90,9 @@ export const donationSlice = createSlice({
       .addCase(getDonations.fulfilled, (state, action) => {
         state.isLoading = false;
         state.donations = action.payload.data || [];
-        state.totalCount = action.payload.totalCount || 0;
+        state.totalCount = action.payload.pagination?.total || 0;
         state.totalAmount = action.payload.totalAmount || 0;
+        state.typeCounts = action.payload.typeCounts || {};
       })
       .addCase(getDonations.rejected, (state, action) => {
         state.isLoading = false;

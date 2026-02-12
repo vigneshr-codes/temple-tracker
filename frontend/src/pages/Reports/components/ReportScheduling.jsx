@@ -7,6 +7,7 @@ import {
   EnvelopeIcon,
   DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
+import authService from '../../../services/authService';
 
 const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
   const { t } = useTranslation();
@@ -34,15 +35,7 @@ const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
 
   const fetchScheduledReports = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/reports/scheduled', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const result = await response.json();
+      const { data: result } = await authService.api.get('/reports/scheduled');
       if (result.success) {
         setScheduledReports(result.data);
       }
@@ -88,20 +81,10 @@ const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/reports/schedule', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...formData,
-          recipients: formData.recipients.filter(email => email.trim() !== '')
-        })
+      const { data: result } = await authService.api.post('/reports/schedule', {
+        ...formData,
+        recipients: formData.recipients.filter(email => email.trim() !== '')
       });
-
-      const result = await response.json();
       if (result.success) {
         await fetchScheduledReports();
         setFormData({
@@ -120,7 +103,7 @@ const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
         setError(result.message || 'Failed to schedule report');
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message);
     } finally {
       setLoading(false);
     }
@@ -128,16 +111,7 @@ const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
 
   const deleteScheduledReport = async (id) => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/reports/scheduled/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
+      const { data: result } = await authService.api.delete(`/reports/scheduled/${id}`);
       if (result.success) {
         await fetchScheduledReports();
       }
@@ -148,17 +122,7 @@ const ReportScheduling = ({ isOpen, onClose, reportType, currentFilters }) => {
 
   const toggleScheduledReport = async (id, active) => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/reports/scheduled/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ active })
-      });
-
-      const result = await response.json();
+      const { data: result } = await authService.api.patch(`/reports/scheduled/${id}`, { active });
       if (result.success) {
         await fetchScheduledReports();
       }

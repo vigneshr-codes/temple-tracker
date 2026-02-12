@@ -9,6 +9,8 @@ const initialState = {
   message: '',
   totalItems: 0,
   expiringItems: [],
+  expiredCount: 0,
+  expiringSoonCount: 0,
 };
 
 // Get inventory
@@ -77,7 +79,9 @@ export const inventorySlice = createSlice({
       .addCase(getInventory.fulfilled, (state, action) => {
         state.isLoading = false;
         state.inventory = action.payload.data || [];
-        state.totalItems = action.payload.totalItems || 0;
+        state.totalItems = action.payload.pagination?.total || 0;
+        state.expiredCount = action.payload.expiredCount || 0;
+        state.expiringSoonCount = action.payload.expiringSoonCount || 0;
       })
       .addCase(getInventory.rejected, (state, action) => {
         state.isLoading = false;

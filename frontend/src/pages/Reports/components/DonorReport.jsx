@@ -22,6 +22,7 @@ import {
   StarIcon
 } from '@heroicons/react/24/outline';
 import ExportOptions from './ExportOptions';
+import authService from '../../../services/authService';
 
 const DonorReport = ({ filters }) => {
   const { t } = useTranslation();
@@ -36,7 +37,6 @@ const DonorReport = ({ filters }) => {
   const fetchDonorData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('temple_token');
       const queryParams = new URLSearchParams({
         period: filters.period || 'month',
         category: filters.category || 'all',
@@ -46,14 +46,7 @@ const DonorReport = ({ filters }) => {
       if (filters.startDate) queryParams.append('startDate', filters.startDate.toISOString());
       if (filters.endDate) queryParams.append('endDate', filters.endDate.toISOString());
       
-      const response = await fetch(`/api/reports/donors?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const result = await response.json();
+      const { data: result } = await authService.api.get(`/reports/donors?${queryParams}`);
       if (result.success) {
         setData(result.data);
         setError(null);
@@ -61,7 +54,7 @@ const DonorReport = ({ filters }) => {
         setError(result.message || 'Failed to fetch data');
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message);
     } finally {
       setLoading(false);
     }

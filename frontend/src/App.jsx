@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Provider } from 'react-redux';
+import { Provider, useDispatch, useSelector } from 'react-redux';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { store } from './store/store';
+import { fetchPublicSettings } from './features/settings/settingsSlice';
 import './i18n'; // Initialize i18n
 import Layout from './components/Layout/Layout';
 import Login from './pages/Auth/Login';
@@ -29,11 +31,29 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppInit() {
+  const dispatch = useDispatch();
+  const { templeConfig } = useSelector((state) => state.settings);
+
+  useEffect(() => {
+    dispatch(fetchPublicSettings());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (templeConfig?.name) {
+      document.title = templeConfig.name.replace(/\|/g, ' ');
+    }
+  }, [templeConfig]);
+
+  return null;
+}
+
 function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <Router>
+          <AppInit />
           <div className="App">
             <Routes>
               <Route path="/login" element={<Login />} />

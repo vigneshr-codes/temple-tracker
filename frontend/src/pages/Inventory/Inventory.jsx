@@ -15,10 +15,11 @@ import {
 import { getInventory, useInventoryItem, getExpiringItems, reset } from '../../features/inventory/inventorySlice';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
+import authService from '../../services/authService';
 
 const Inventory = () => {
   const dispatch = useDispatch();
-  const { inventory, isLoading, isError, message, expiringItems } = useSelector(
+  const { inventory, isLoading, isError, message, expiringItems, expiredCount, expiringSoonCount } = useSelector(
     (state) => state.inventory
   );
   const { user: currentUser } = useSelector((state) => state.auth);
@@ -102,17 +103,7 @@ const Inventory = () => {
   const generateBarcode = async (item) => {
     try {
       setBarcodeLoading(true);
-      const token = localStorage.getItem('token');
-      
-      const response = await fetch(`http://localhost:3001/api/inventory/${item._id}/barcode`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
+      const { data } = await authService.api.post(`/inventory/${item._id}/barcode`);
       
       if (data.success) {
         setSelectedBarcodeItem({
@@ -225,7 +216,7 @@ const Inventory = () => {
                          item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.inventoryId?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = !filters.status || item.status === filters.status;
-    const matchesType = !filters.itemType || item.itemType.includes(filters.itemType);
+    const matchesType = !filters.itemType || item.itemType === filters.itemType;
     
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -301,7 +292,7 @@ const Inventory = () => {
                     Expiring Soon
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {expiringItems.length}
+                    {expiringSoonCount}
                   </dd>
                 </dl>
               </div>
@@ -321,7 +312,7 @@ const Inventory = () => {
                     Expired
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {inventory.filter(item => item.status === 'expired').length}
+                    {expiredCount}
                   </dd>
                 </dl>
               </div>
@@ -387,12 +378,18 @@ const Inventory = () => {
             onChange={(e) => setFilters({...filters, itemType: e.target.value})}
           >
             <option value="">All Types</option>
-            <option value="Rice">Rice</option>
-            <option value="Oil">Oil</option>
-            <option value="Flour">Flour</option>
-            <option value="Vegetables">Vegetables</option>
-            <option value="Fruits">Fruits</option>
-            <option value="Other">Other</option>
+            <option value="rice">Rice</option>
+            <option value="oil">Oil</option>
+            <option value="ghee">Ghee</option>
+            <option value="vegetables">Vegetables</option>
+            <option value="lentils">Lentils</option>
+            <option value="sugar">Sugar</option>
+            <option value="salt">Salt</option>
+            <option value="dal">Dal</option>
+            <option value="wheat">Wheat</option>
+            <option value="flour">Flour</option>
+            <option value="coconut">Coconut</option>
+            <option value="other">Other</option>
           </select>
         </div>
       </div>
@@ -723,70 +720,13 @@ const Inventory = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              const printWindow = window.open('', '_blank');
-                              const barcodeHTML = selectedBarcodeItem.barcode.image;
-                              
-                              printWindow.document.write(`
-                                <!DOCTYPE html>
-                                <html>
-                                  <head>
-                                    <title>QR Code - ${selectedBarcodeItem.inventoryId}</title>
-                                    <style>
-                                      @media print {
-                                        body { margin: 0; }
-                                      }
-                                      body { 
-                                        font-family: Arial, sans-serif; 
-                                        text-align: center; 
-                                        padding: 20px;
-                                        margin: 0;
-                                      }
-                                      .barcode-container { 
-                                        display: inline-block; 
-                                        border: 2px solid #000; 
-                                        padding: 15px; 
-                                        margin: 10px;
-                                        background: white;
-                                      }
-                                      .barcode-container > div {
-                                        text-align: center;
-                                        display: flex;
-                                        flex-direction: column;
-                                        align-items: center;
-                                      }
-                                      .qr-code {
-                                        margin: 10px auto;
-                                      }
-                                      h2 {
-                                        margin-top: 0;
-                                        color: #333;
-                                        font-size: 18px;
-                                      }
-                                      .item-details {
-                                        font-size: 14px;
-                                        color: #666;
-                                        margin-top: 10px;
-                                      }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <div class="barcode-container">
-                                      <h2>${selectedBarcodeItem.itemType} - ${selectedBarcodeItem.inventoryId}</h2>
-                                      ${barcodeHTML}
-                                      <div class="item-details">
-                                        <p>Quantity: ${selectedBarcodeItem.remainingQuantity}/${selectedBarcodeItem.quantity} ${selectedBarcodeItem.unit}</p>
-                                        ${selectedBarcodeItem.donor ? `<p>Donor: ${selectedBarcodeItem.donor.name}</p>` : ''}
-                                        ${selectedBarcodeItem.expiryDate ? `<p>Expires: ${new Date(selectedBarcodeItem.expiryDate).toLocaleDateString()}</p>` : ''}
-                                      </div>
-                                    </div>
-                                  </body>
-                                </html>
-                              `);
-                              printWindow.document.close();
-                              setTimeout(() => {
-                                printWindow.print();
-                                setTimeout(() => printWindow.close(), 1000);
-                              }, 500);
+                              const blob = new Blob([selectedBarcodeItem.barcode.image], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const win = window.open(url, '_blank', 'width=400,height=500');
+                              win?.addEventListener('load', () => {
+                                URL.revokeObjectURL(url);
+                                win.print();
+                              });
                             }}
                             className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
                           >

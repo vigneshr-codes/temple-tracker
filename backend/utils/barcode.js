@@ -1,5 +1,16 @@
 const QRCode = require('qrcode');
 
+// Escape HTML special characters to prevent XSS in generated HTML labels
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+};
+
 // Generate QR code for inventory items
 const generateQRCode = async (data) => {
   try {
@@ -37,10 +48,11 @@ const generateBarcodeData = (inventoryItem) => {
 };
 
 // Create printable barcode label HTML
-const createBarcodeLabel = async (inventoryItem) => {
+const createBarcodeLabel = async (inventoryItem, templeName) => {
   const barcodeData = generateBarcodeData(inventoryItem);
   const qrCode = await generateQRCode(barcodeData);
-  
+  const displayName = escapeHtml(templeName || process.env.TEMPLE_NAME || 'Temple');
+
   const labelHTML = `
     <!DOCTYPE html>
     <html>
@@ -56,16 +68,16 @@ const createBarcodeLabel = async (inventoryItem) => {
     </head>
     <body>
       <div class="label">
-        <div class="temple-name">${process.env.TEMPLE_NAME || 'Sri Krishna Temple'}</div>
-        <div class="item-info"><strong>Item:</strong> ${inventoryItem.itemType.toUpperCase()}</div>
-        <div class="item-info"><strong>Quantity:</strong> ${inventoryItem.quantity} ${inventoryItem.unit}</div>
-        <div class="item-info"><strong>Donated by:</strong> ${inventoryItem.donor.name}</div>
+        <div class="temple-name">${displayName}</div>
+        <div class="item-info"><strong>Item:</strong> ${escapeHtml(inventoryItem.itemType.toUpperCase())}</div>
+        <div class="item-info"><strong>Quantity:</strong> ${escapeHtml(String(inventoryItem.quantity))} ${escapeHtml(inventoryItem.unit)}</div>
+        <div class="item-info"><strong>Donated by:</strong> ${escapeHtml(inventoryItem.donor.name)}</div>
         <div class="item-info"><strong>Date:</strong> ${new Date(inventoryItem.createdAt).toLocaleDateString()}</div>
         ${inventoryItem.expiryDate ? `<div class="item-info"><strong>Expiry:</strong> ${new Date(inventoryItem.expiryDate).toLocaleDateString()}</div>` : ''}
         <div class="qr-code">
           <img src="${qrCode}" alt="QR Code" style="width: 80px; height: 80px;">
         </div>
-        <div class="item-info"><strong>ID:</strong> ${inventoryItem.inventoryId}</div>
+        <div class="item-info"><strong>ID:</strong> ${escapeHtml(inventoryItem.inventoryId)}</div>
         <div class="footer">Scan to use item</div>
       </div>
     </body>

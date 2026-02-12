@@ -12,14 +12,17 @@ import {
 import { getDonations } from '../../features/donations/donationSlice';
 import { getEvents } from '../../features/events/eventSlice';
 import { getExpenses } from '../../features/expenses/expenseSlice';
+import { getInventory } from '../../features/inventory/inventorySlice';
 import { canAccessModule } from '../../utils/permissions';
 import { TamilCalendarWidget } from '../../components/TamilCalendar';
+import authService from '../../services/authService';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
   const { donations, totalAmount } = useSelector((state) => state.donations);
+  const { totalItems } = useSelector((state) => state.inventory);
   const { events } = useSelector((state) => state.events);
   const { expenses, totalAmount: expenseTotalAmount } = useSelector((state) => state.expenses);
   const [fundsData, setFundsData] = useState({ totalBalance: 0, fundCount: 0 });
@@ -32,6 +35,9 @@ const Dashboard = () => {
     if (canAccessModule(user, 'expenses')) {
       dispatch(getExpenses());
     }
+    if (canAccessModule(user, 'inventory')) {
+      dispatch(getInventory());
+    }
     // Fetch funds data
     if (user && canAccessModule(user, 'funds')) {
       fetchFundsData();
@@ -40,15 +46,7 @@ const Dashboard = () => {
 
   const fetchFundsData = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/funds', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
+      const { data } = await authService.api.get('/funds');
       if (data.success) {
         const totalBalance = data.summary?.totalBalances?.total || 0;
         const fundCount = data.summary?.totalFunds || 0;
@@ -63,8 +61,6 @@ const Dashboard = () => {
     {
       name: 'Total Donations',
       value: `₹${totalAmount?.toLocaleString('en-IN') || 0}`,
-      change: `+${donations.length} donations`,
-      changeType: 'increase',
       icon: CurrencyDollarIcon,
       href: '/donations',
       module: 'donations'
@@ -72,17 +68,13 @@ const Dashboard = () => {
     {
       name: 'Total Balance',
       value: `₹${fundsData.totalBalance?.toLocaleString('en-IN') || 0}`,
-      change: `+${fundsData.fundCount} funds`,
-      changeType: 'increase',
       icon: UserGroupIcon,
       href: '/funds',
       module: 'funds'
     },
     {
       name: 'Inventory Items',
-      value: `${donations.filter(d => d.type === 'in-kind').reduce((acc, d) => acc + (d.items?.length || 0), 0)}`,
-      change: `+${donations.filter(d => d.type === 'in-kind').length} donations`,
-      changeType: 'increase',
+      value: `${totalItems}`,
       icon: ArchiveBoxIcon,
       href: '/inventory',
       module: 'inventory'
@@ -90,8 +82,6 @@ const Dashboard = () => {
     {
       name: 'Total Expenses',
       value: `₹${expenseTotalAmount?.toLocaleString('en-IN') || 0}`,
-      change: `+${expenses.length} expenses`,
-      changeType: 'increase',
       icon: DocumentTextIcon,
       href: '/expenses',
       module: 'expenses'
@@ -99,8 +89,6 @@ const Dashboard = () => {
     {
       name: 'Active Events',
       value: `${events.filter(e => e.status === 'upcoming' || e.status === 'ongoing').length}`,
-      change: `+${events.length} total`,
-      changeType: 'increase',
       icon: CalendarDaysIcon,
       href: '/events',
       module: 'events'
@@ -219,15 +207,6 @@ const Dashboard = () => {
               </div>
               <div className="ml-16 flex items-baseline pb-6 sm:pb-7">
                 <p className="text-2xl font-semibold text-gray-900">{item.value}</p>
-                <p
-                  className={`ml-2 flex items-baseline text-sm font-semibold ${
-                    item.changeType === 'increase'
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }`}
-                >
-                  {item.change}
-                </p>
               </div>
             </div>
           ))}
@@ -272,60 +251,6 @@ const Dashboard = () => {
           <TamilCalendarWidget showNavigation={true} />
         </div>
 
-        {/* Recent Activity */}
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-          <div className="bg-white shadow rounded-lg">
-            <ul className="divide-y divide-gray-200">
-              {recentActivities.map((activity) => (
-                <li key={activity.id} className="p-4">
-                  <div className="flex space-x-3">
-                    <div
-                      className={`flex-shrink-0 w-2 h-2 mt-2 rounded-full ${
-                        activity.type === 'success'
-                          ? 'bg-green-400'
-                          : activity.type === 'warning'
-                          ? 'bg-yellow-400'
-                          : activity.type === 'error'
-                          ? 'bg-red-400'
-                          : 'bg-blue-400'
-                      }`}
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900">{activity.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Welcome Message */}
-      <div className="mt-8">
-        <div className="bg-gradient-to-r from-temple-50 to-saffron-50 border border-temple-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <ChartBarSquareIcon className="h-8 w-8 text-temple-600" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-lg font-medium text-temple-900">
-                Welcome to Temple Tracker
-              </h3>
-              <p className="text-sm text-temple-700 mt-1">
-                Your comprehensive solution for managing temple donations, inventory, expenses, and events. 
-                Start by exploring the navigation menu to access all features.
-              </p>
-              <div className="mt-4">
-                <span className="inline-flex items-center text-sm font-medium text-temple-600">
-                  🕉️ Om Namah Shivaya 🙏
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

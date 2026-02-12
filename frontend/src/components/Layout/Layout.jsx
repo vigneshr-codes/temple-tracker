@@ -10,9 +10,10 @@ import { NavLink } from "react-router-dom";
 import QRScanner from "../QRScanner/QRScanner";
 import LanguageSwitcher from "../LanguageSwitcher";
 import { canAccessModule } from "../../utils/permissions";
+import { BACKEND_STATIC_URL } from "../../features/settings/settingsSlice";
 
 const navigation = [
-  { nameKey: "navigation.dashboard", href: "/", icon: HomeIcon, module: null }, // No permission required for dashboard
+  { nameKey: "navigation.dashboard", href: "/", icon: HomeIcon, module: null },
   { nameKey: "navigation.donations", href: "/donations", icon: CurrencyDollarIcon, module: "donations" },
   { nameKey: "navigation.inventory", href: "/inventory", icon: ArchiveBoxIcon, module: "inventory" },
   { nameKey: "navigation.expenses", href: "/expenses", icon: DocumentTextIcon, module: "expenses" },
@@ -33,7 +34,12 @@ const Layout = () => {
   const { t } = useTranslation();
   const { user } = useSelector(state => state.auth);
   const { sidebarOpen } = useSelector(state => state.ui);
+  const { templeConfig } = useSelector(state => state.settings);
+  const templeName = (templeConfig?.name || 'Temple Tracker').replace(/\|/g, ' ');
+  const templeNameLines = (templeConfig?.name || 'Temple Tracker').split('|').filter(Boolean);
+  const logoUrl = templeConfig?.logo ? `${BACKEND_STATIC_URL}${templeConfig.logo}` : null;
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -83,31 +89,47 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile menu */}
+      {/* Mobile menu overlay */}
       <div className={`fixed inset-0 flex z-40 lg:hidden ${sidebarOpen ? "" : "hidden"}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={toggleSidebarHandler}></div>
 
-        <div className="relative flex-1 flex flex-col max-w-xs w-full pt-5 pb-4 bg-white">
+        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white shadow-xl">
           <div className="absolute top-0 right-0 -mr-12 pt-2">
             <button type="button" className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" onClick={toggleSidebarHandler}>
               <XMarkIcon className="h-6 w-6 text-white" />
             </button>
           </div>
 
-          <div className="flex-shrink-0 flex items-center px-4">
-            <div className="h-10 w-10 bg-gradient-to-br from-saffron-500 to-temple-500 rounded-lg flex items-center justify-center">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+          {/* Mobile sidebar header */}
+          <div className="flex flex-col items-center pt-6 pb-4 px-4 border-b border-gray-100">
+            <div
+              className="rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
+              style={{ width: 52, height: 52, border: '2px solid #fde68a', boxShadow: '0 0 0 3px #fffbeb', background: '#fffbeb' }}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt={templeName} style={{ width: 52, height: 52, objectFit: 'contain' }} />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-saffron-500 to-temple-500 flex items-center justify-center">
+                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+              )}
             </div>
-            <span className="ml-2 text-xl font-bold text-gray-900">Temple Tracker</span>
+            <div className="mt-3 text-center">
+              {templeNameLines.map((line, i) => (
+                <p key={i} className="text-xs font-bold text-gray-800 leading-snug tracking-wide uppercase">
+                  {line}
+                </p>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-5 flex-1 h-0 overflow-y-auto">
-            <nav className="px-2 space-y-1">
+          <div className="flex-1 overflow-y-auto pt-3 pb-4">
+            <nav className="px-2 space-y-0.5">
               {allNavigation.map(item => (
-                <NavLink key={item.nameKey} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
-                  <item.icon className="mr-3 flex-shrink-0 h-6 w-6" />
+                <NavLink key={item.nameKey} to={item.href} onClick={toggleSidebarHandler} className={({ isActive }) => `group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
+                  <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
                   {t(item.nameKey)}
                 </NavLink>
               ))}
@@ -116,24 +138,67 @@ const Layout = () => {
         </div>
       </div>
 
-      {/* Static sidebar for desktop */}
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-        <div className="flex flex-col flex-grow bg-white pt-5 pb-4 overflow-y-auto border-r border-gray-200">
-          <div className="flex items-center flex-shrink-0 px-4">
-            <div className="h-10 w-10 bg-gradient-to-br from-saffron-500 to-temple-500 rounded-lg flex items-center justify-center shadow-lg">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+      {/* Desktop sidebar */}
+      <div className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 transition-all duration-300 ${desktopCollapsed ? 'lg:w-16' : 'lg:w-64'}`}>
+        <div className="flex flex-col flex-grow bg-white border-r border-gray-200 overflow-y-auto overflow-x-hidden">
+
+          {/* Sidebar header: logo + temple name */}
+          <div className={`flex flex-col items-center flex-shrink-0 border-b border-gray-100 ${desktopCollapsed ? 'py-4 px-2' : 'pt-5 pb-4 px-4'}`}>
+            <div
+              className="rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
+              style={{
+                width: desktopCollapsed ? 40 : 52,
+                height: desktopCollapsed ? 40 : 52,
+                border: '2px solid #fde68a',
+                boxShadow: '0 0 0 3px #fffbeb',
+                background: '#fffbeb',
+                transition: 'all 0.3s'
+              }}
+              title={templeName}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt={templeName} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-saffron-500 to-temple-500 flex items-center justify-center">
+                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+              )}
             </div>
-            <span className="ml-2 text-xl font-bold text-gray-900">Temple Tracker</span>
+
+            {/* Temple name below logo — hidden when collapsed */}
+            {!desktopCollapsed && (
+              <div className="mt-3 text-center w-full">
+                {templeNameLines.map((line, i) => (
+                  <p key={i} className="text-xs font-bold text-gray-800 leading-snug tracking-wide uppercase">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="mt-8 flex-1 flex flex-col">
-            <nav className="flex-1 px-2 space-y-1">
+          {/* Nav items */}
+          <div className="flex-1 flex flex-col pt-3">
+            <nav className="flex-1 px-2 space-y-0.5">
               {allNavigation.map(item => (
-                <NavLink key={item.nameKey} to={item.href} className={({ isActive }) => `group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${isActive ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
-                  <item.icon className="mr-3 flex-shrink-0 h-6 w-6" />
-                  {t(item.nameKey)}
+                <NavLink
+                  key={item.nameKey}
+                  to={item.href}
+                  title={desktopCollapsed ? t(item.nameKey) : undefined}
+                  className={({ isActive }) =>
+                    `group flex items-center rounded-lg transition-colors ${
+                      desktopCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2.5'
+                    } text-sm font-medium ${
+                      isActive
+                        ? "bg-gradient-to-r from-temple-100 to-saffron-50 text-temple-700 border-r-2 border-temple-500"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }`
+                  }
+                >
+                  <item.icon className={`flex-shrink-0 h-5 w-5 ${desktopCollapsed ? '' : 'mr-3'}`} />
+                  {!desktopCollapsed && <span>{t(item.nameKey)}</span>}
                 </NavLink>
               ))}
             </nav>
@@ -142,35 +207,43 @@ const Layout = () => {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64 flex flex-col flex-1">
-        <div className="sticky top-0 z-10 flex-shrink-0 flex h-16 bg-white shadow border-b border-gray-200 lg:border-none">
-          <button type="button" className="px-4 border-r border-gray-200 text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-temple-500 lg:hidden" onClick={toggleSidebarHandler}>
-            <Bars3Icon className="h-6 w-6" />
+      <div className={`flex flex-col flex-1 transition-all duration-300 ${desktopCollapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
+        {/* Top navbar */}
+        <div className="sticky top-0 z-10 flex-shrink-0 flex h-14 bg-white shadow-sm border-b border-gray-200">
+
+          {/* Toggle button — mobile hamburger + desktop collapse */}
+          <button
+            type="button"
+            className="px-4 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-temple-500 lg:border-r lg:border-gray-200"
+            onClick={() => {
+              toggleSidebarHandler(); // mobile
+              setDesktopCollapsed(c => !c); // desktop
+            }}
+            title={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <Bars3Icon className="h-5 w-5" />
           </button>
 
-          <div className="flex-1 px-4 flex justify-between items-center">
-            <div className="flex-1">
-              <h1 className="text-2xl font-semibold text-gray-900 hidden lg:block">Welcome back, {user?.name}</h1>
-            </div>
+          <div className="flex-1 px-4 flex justify-end items-center space-x-3">
+            <LanguageSwitcher />
 
-            <div className="ml-4 flex items-center space-x-4">
-              <LanguageSwitcher />
-              
-              <div className="flex items-center space-x-2">
-                <div className="h-8 w-8 bg-gradient-to-br from-saffron-500 to-temple-500 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-white">{user?.name?.charAt(0)}</span>
-                </div>
-                <div className="hidden md:block">
-                  <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-                </div>
+            <div className="flex items-center space-x-2">
+              <div className="h-8 w-8 bg-gradient-to-br from-saffron-500 to-temple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-medium text-white">{user?.name?.charAt(0)}</span>
               </div>
-
-              <button onClick={handleLogout} className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500 transition-colors">
-                <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
-                Logout
-              </button>
+              <div className="hidden md:block">
+                <p className="text-sm font-medium text-gray-900 leading-tight">{user?.name}</p>
+                <p className="text-xs text-gray-500 capitalize leading-tight">{user?.role}</p>
+              </div>
             </div>
+
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-3 py-1.5 border border-gray-200 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500 transition-colors"
+            >
+              <ArrowRightOnRectangleIcon className="h-4 w-4 mr-1.5" />
+              Logout
+            </button>
           </div>
         </div>
 

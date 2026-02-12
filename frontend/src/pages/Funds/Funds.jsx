@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Dialog, Transition } from '@headlessui/react';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
+import authService from '../../services/authService';
 import {
   BanknotesIcon,
   CreditCardIcon,
@@ -41,6 +42,9 @@ const Funds = () => {
   const [selectedFund, setSelectedFund] = useState(null);
   const [showFundDetails, setShowFundDetails] = useState(false);
   const [showProcessDonation, setShowProcessDonation] = useState(false);
+  const [selectedDonationIds, setSelectedDonationIds] = useState([]);
+  const [bulkFundCategory, setBulkFundCategory] = useState('general');
+  const [processingBulk, setProcessingBulk] = useState(false);
   const [showAllocateExpense, setShowAllocateExpense] = useState(false);
   const [showTransferFunds, setShowTransferFunds] = useState(false);
   const [pendingDonations, setPendingDonations] = useState([]);
@@ -80,20 +84,7 @@ const Funds = () => {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('temple_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
-      const response = await fetch('/api/funds', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get('/funds');
       if (data.success) {
         setFunds(data.data);
         setTotalBalances(data.summary.totalBalances);
@@ -110,15 +101,7 @@ const Funds = () => {
 
   const fetchPendingDonations = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/donations?status=received&type=cash,upi', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get('/donations?status=received&type=cash,upi');
       if (data.success) {
         setPendingDonations(data.data.filter(d => d.type === 'cash' || d.type === 'upi'));
       }
@@ -129,15 +112,7 @@ const Funds = () => {
 
   const fetchPendingExpenses = async () => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/expenses?status=approved', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get('/expenses?status=approved');
       if (data.success) {
         setPendingExpenses(data.data);
       }
@@ -148,25 +123,8 @@ const Funds = () => {
 
   const processDonation = async (donationId, fundCategory = 'general') => {
     try {
-      console.log('Processing donation:', donationId, 'Category:', fundCategory);
-      const token = localStorage.getItem('temple_token');
-      console.log('Token exists:', !!token);
-      
-      const response = await fetch(`/api/funds/process-donation/${donationId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fundCategory })
-      });
-
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-      
+      const { data } = await authService.api.post(`/funds/process-donation/${donationId}`, { fundCategory });
       if (data.success) {
-        setShowProcessDonation(false);
         fetchFunds();
         fetchPendingDonations();
         showNotification(`Successfully processed donation into ${fundCategory} fund`, 'success');
@@ -174,24 +132,35 @@ const Funds = () => {
         showNotification(data.message || 'Failed to process donation', 'error');
       }
     } catch (error) {
-      console.error('Error processing donation:', error);
       showNotification('Failed to process donation: ' + error.message, 'error');
+    }
+  };
+
+  const processBulkDonations = async () => {
+    if (!selectedDonationIds.length || !bulkFundCategory) return;
+    setProcessingBulk(true);
+    const results = await Promise.allSettled(
+      selectedDonationIds.map(id =>
+        authService.api.post(`/funds/process-donation/${id}`, { fundCategory: bulkFundCategory })
+          .then(r => r.data)
+      )
+    );
+    const succeeded = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+    const failed = results.length - succeeded;
+    setProcessingBulk(false);
+    setSelectedDonationIds([]);
+    fetchFunds();
+    fetchPendingDonations();
+    if (succeeded > 0) {
+      showNotification(`Processed ${succeeded} donation${succeeded > 1 ? 's' : ''} into ${bulkFundCategory} fund${failed > 0 ? ` (${failed} failed)` : ''}`, 'success');
+    } else {
+      showNotification('Failed to process donations', 'error');
     }
   };
 
   const allocateExpense = async (expenseId, fundCategory = 'general', paymentMethod = 'cash') => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/funds/allocate-expense/${expenseId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ fundCategory, paymentMethod })
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.post(`/funds/allocate-expense/${expenseId}`, { fundCategory, paymentMethod });
       if (data.success) {
         setShowAllocateExpense(false);
         fetchFunds();
@@ -201,24 +170,13 @@ const Funds = () => {
         showNotification(data.message || 'Failed to allocate expense', 'error');
       }
     } catch (error) {
-      console.error('Error allocating expense:', error);
       showNotification('Failed to allocate expense', 'error');
     }
   };
 
   const transferFunds = async (transferData) => {
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/funds/transfer', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(transferData)
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.post('/funds/transfer', transferData);
       if (data.success) {
         setShowTransferFunds(false);
         fetchFunds();
@@ -517,47 +475,103 @@ const Funds = () => {
       {/* Process Donation Modal */}
       {showProcessDonation && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Process Donations</h3>
-              <div className="space-y-3">
-                {pendingDonations.length > 0 ? (
-                  pendingDonations.map((donation) => (
-                    <div key={donation._id} className="flex justify-between items-center p-3 border rounded">
-                      <div className="text-left">
-                        <p className="font-medium">{donation.donor.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {formatCurrency(donation.amount)} - {donation.type}
-                        </p>
-                        <p className="text-xs text-gray-500">{formatDate(donation.createdAt)}</p>
-                      </div>
-                      <div className="space-x-2">
-                        <select
-                          onChange={(e) => processDonation(donation._id, e.target.value)}
-                          className="text-sm border rounded p-1"
-                          defaultValue=""
-                        >
-                          <option value="">Select Fund</option>
-                          {fundCategories.map(cat => (
-                            <option key={cat.value} value={cat.value}>{cat.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500">No pending donations to process</p>
-                )}
-              </div>
-              <div className="mt-4">
-                <button
-                  onClick={() => setShowProcessDonation(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Close
-                </button>
-              </div>
+          <div className="relative top-10 mx-auto border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Process Donations</h3>
+              <button onClick={() => setShowProcessDonation(false)} className="text-gray-400 hover:text-gray-600">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
             </div>
+
+            {pendingDonations.length > 0 ? (
+              <>
+                {/* Bulk action bar */}
+                <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-3">
+                  {/* Select All checkbox */}
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-temple-600 focus:ring-temple-500"
+                      checked={selectedDonationIds.length === pendingDonations.length}
+                      ref={el => { if (el) el.indeterminate = selectedDonationIds.length > 0 && selectedDonationIds.length < pendingDonations.length; }}
+                      onChange={(e) => setSelectedDonationIds(e.target.checked ? pendingDonations.map(d => d._id) : [])}
+                    />
+                    Select All ({pendingDonations.length})
+                  </label>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <select
+                      value={bulkFundCategory}
+                      onChange={(e) => setBulkFundCategory(e.target.value)}
+                      className="text-sm border border-gray-300 rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-temple-500 min-w-[200px]"
+                    >
+                      {fundCategories.map(cat => (
+                        <option key={cat.value} value={cat.value}>{cat.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={processBulkDonations}
+                      disabled={!selectedDonationIds.length || processingBulk}
+                      className="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      {processingBulk
+                        ? 'Processing...'
+                        : `Process${selectedDonationIds.length ? ` (${selectedDonationIds.length})` : ''}`}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Donation list */}
+                <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                  {pendingDonations.map((donation) => {
+                    const isSelected = selectedDonationIds.includes(donation._id);
+                    return (
+                      <label
+                        key={donation._id}
+                        className={`flex items-center gap-4 px-6 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-temple-50' : 'hover:bg-gray-50'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-temple-600 focus:ring-temple-500 flex-shrink-0"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            setSelectedDonationIds(prev =>
+                              e.target.checked ? [...prev, donation._id] : prev.filter(id => id !== donation._id)
+                            );
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{donation.donor.name}</p>
+                          <p className="text-xs text-gray-500">{formatDate(donation.createdAt)} · {donation.type}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 flex-shrink-0">
+                          {formatCurrency(donation.amount)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+                  <p className="text-xs text-gray-500">
+                    {selectedDonationIds.length} of {pendingDonations.length} selected
+                  </p>
+                  <button
+                    onClick={() => setShowProcessDonation(false)}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="px-6 py-12 text-center">
+                <CheckCircleIcon className="mx-auto h-10 w-10 text-green-400 mb-3" />
+                <p className="text-gray-500">No pending donations to process</p>
+                <button onClick={() => setShowProcessDonation(false)} className="mt-4 px-4 py-2 text-sm border rounded-md text-gray-700 hover:bg-gray-50">Close</button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -3,6 +3,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import { login, reset } from "../../features/auth/authSlice";
 import { addNotification } from "../../features/ui/uiSlice";
+import { BACKEND_STATIC_URL } from "../../features/settings/settingsSlice";
+
+// Split name into display lines using | as a manual line-break separator.
+// e.g. "OM MAHALINGESWARA|IDAYAMELUR SRILA SRI MAYANDI SIDDHAR|ARAKKATALAI SIDDHAR PEEDAM"
+// Falls back to single line if no | present.
+const splitNameLines = (name) => name.split('|').filter(Boolean);
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -14,6 +20,9 @@ const Login = () => {
   const navigate = useNavigate();
 
   const { user, isLoading, isError, isSuccess, message } = useSelector(state => state.auth);
+  const { templeConfig } = useSelector(state => state.settings);
+  const templeName = templeConfig?.name || 'Temple Tracker';
+  const logoUrl = templeConfig?.logo ? `${BACKEND_STATIC_URL}${templeConfig.logo}` : null;
 
   useEffect(() => {
     if (isError) {
@@ -78,30 +87,57 @@ const Login = () => {
       <div className="w-full max-w-md space-y-8">
         {/* Logo and Header */}
         <div className="text-center">
+          {/* Logo */}
           <div
-            className="mx-auto h-16 w-16 bg-gradient-to-br from-amber-500 to-red-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl transform hover:scale-105 transition-all duration-300"
+            className="mx-auto mb-5 shadow-xl transform hover:scale-105 transition-all duration-300 overflow-hidden"
             style={{
-              background: "linear-gradient(135deg, #f59e0b 0%, #dc2626 100%)",
-              width: "64px",
-              height: "64px",
-              borderRadius: "16px",
+              background: logoUrl ? "white" : "linear-gradient(135deg, #f59e0b 0%, #dc2626 100%)",
+              width: "88px",
+              height: "88px",
+              borderRadius: "50%",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              marginBottom: "24px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              cursor: "pointer"
+              boxShadow: "0 20px 40px -8px rgba(245,158,11,0.4), 0 0 0 4px rgba(245,158,11,0.15)"
             }}
           >
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+            {logoUrl ? (
+              <img src={logoUrl} alt={templeName} style={{ width: "88px", height: "88px", objectFit: "cover", borderRadius: "50%" }} />
+            ) : (
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            )}
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2" style={{ fontSize: "32px", fontWeight: "800", color: "#111827", marginBottom: "8px", fontFamily: "system-ui, -apple-system" }}>
-            Temple Tracker
+
+          {/* Temple name — broken into lines at ~28-char word boundaries */}
+          <h1
+            className="font-bold text-gray-900 text-center tracking-wide"
+            style={{
+              fontSize: templeName.length > 40 ? "13px" : templeName.length > 25 ? "16px" : "20px",
+              fontWeight: "700",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              lineHeight: "1.75",
+              margin: "0 auto"
+            }}
+          >
+            {splitNameLines(templeName).map((line, i) => (
+              <span key={i} style={{ display: "block" }}>{line}</span>
+            ))}
           </h1>
-          <p className="text-gray-600 text-base" style={{ color: "#6b7280", fontSize: "16px", marginBottom: "32px" }}>
-            Manage temple donations and expenses
+
+          {/* Decorative divider */}
+          <div className="flex items-center justify-center gap-2 my-3">
+            <div style={{ height: "1px", width: "32px", background: "linear-gradient(to right, transparent, #f59e0b)" }} />
+            <span style={{ color: "#f59e0b", fontSize: "10px" }}>✦</span>
+            <div style={{ height: "1px", width: "32px", background: "linear-gradient(to left, transparent, #f59e0b)" }} />
+          </div>
+
+          <p className="text-gray-500 text-sm mb-8">
+            {templeConfig?.address?.street && templeConfig?.address?.city && templeConfig?.address?.state
+              ? `${templeConfig?.address?.street}, ${templeConfig.address.city}, ${templeConfig.address.state}`
+              : templeConfig?.address?.city || 'Temple Management System'}
           </p>
         </div>
 
@@ -212,7 +248,7 @@ const Login = () => {
         </div>
 
         <div className="text-center">
-          <p className="text-xs text-gray-500">© 2024 Temple Tracker. Streamlining temple management with devotion.</p>
+          <p className="text-xs text-gray-500">© {new Date().getFullYear()} {templeName.replace(/\|/g, ' ')}</p>
         </div>
       </div>
     </div>

@@ -22,6 +22,7 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline';
 import ExportOptions from './ExportOptions';
+import authService from '../../../services/authService';
 
 const ExpenseReport = ({ filters }) => {
   const { t } = useTranslation();
@@ -36,7 +37,6 @@ const ExpenseReport = ({ filters }) => {
   const fetchExpenseData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('temple_token');
       const queryParams = new URLSearchParams({
         period: filters.period || 'month',
         category: filters.category || 'all',
@@ -46,14 +46,7 @@ const ExpenseReport = ({ filters }) => {
       if (filters.startDate) queryParams.append('startDate', filters.startDate.toISOString());
       if (filters.endDate) queryParams.append('endDate', filters.endDate.toISOString());
       
-      const response = await fetch(`/api/reports/expense?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const result = await response.json();
+      const { data: result } = await authService.api.get(`/reports/expense?${queryParams}`);
       if (result.success) {
         setData(result.data);
         setError(null);
@@ -61,7 +54,7 @@ const ExpenseReport = ({ filters }) => {
         setError(result.message || 'Failed to fetch data');
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message);
     } finally {
       setLoading(false);
     }

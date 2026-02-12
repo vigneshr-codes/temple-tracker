@@ -14,15 +14,18 @@ import {
 } from '@heroicons/react/24/outline';
 import { getDonations, createDonation, reset } from '../../features/donations/donationSlice';
 import { getEvents } from '../../features/events/eventSlice';
+import { getInventory } from '../../features/inventory/inventorySlice';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission, canAccessModule } from '../../utils/permissions';
+import DonationReceipt from '../../components/DonationReceipt';
 
 const Donations = () => {
   const dispatch = useDispatch();
-  const { donations, isLoading, isError, message, totalAmount } = useSelector(
+  const { donations, isLoading, isError, message, totalAmount, totalCount, typeCounts } = useSelector(
     (state) => state.donations
   );
   const { events } = useSelector((state) => state.events);
+  const { totalItems } = useSelector((state) => state.inventory);
   const { user: currentUser } = useSelector((state) => state.auth);
 
   // Check if user can access donations module
@@ -75,7 +78,11 @@ const Donations = () => {
     description: '',
     quantity: '',
     unit: 'kg',
+    expiryDateSource: 'manual',
     expiryDate: '',
+    manufactureDate: '',
+    shelfLifeValue: '',
+    shelfLifeUnit: 'months',
     storageInstructions: ''
   });
 
@@ -90,6 +97,9 @@ const Donations = () => {
     // Fetch events for dropdown
     if (canAccessModule(currentUser, 'events')) {
       dispatch(getEvents());
+    }
+    if (canAccessModule(currentUser, 'inventory')) {
+      dispatch(getInventory());
     }
   }, [dispatch, filters, currentUser]);
 
@@ -114,6 +124,12 @@ const Donations = () => {
     // Handle event selection logic
     if (donationForm.eventSelectionType === 'specific' && donationForm.specificEvent) {
       donationData.specificEvent = donationForm.specificEvent;
+      // Derive `event` category from the selected specific event's type
+      const donationEventEnum = ['new-moon', 'full-moon', 'guru-poojai', 'uthira-nakshatram', 'adi-ammavasai', 'anadhanam', 'pradosham', 'shivaratri', 'other'];
+      const matchedEvent = events.find(ev => ev._id === donationForm.specificEvent);
+      donationData.event = (matchedEvent && donationEventEnum.includes(matchedEvent.type))
+        ? matchedEvent.type
+        : 'other';
     } else {
       // Remove specificEvent if using general events
       delete donationData.specificEvent;
@@ -168,7 +184,11 @@ const Donations = () => {
       description: '',
       quantity: '',
       unit: 'kg',
+      expiryDateSource: 'manual',
       expiryDate: '',
+      manufactureDate: '',
+      shelfLifeValue: '',
+      shelfLifeUnit: 'months',
       storageInstructions: ''
     });
   };
@@ -192,7 +212,11 @@ const Donations = () => {
       description: '',
       quantity: '',
       unit: 'kg',
+      expiryDateSource: 'manual',
       expiryDate: '',
+      manufactureDate: '',
+      shelfLifeValue: '',
+      shelfLifeUnit: 'months',
       storageInstructions: ''
     });
   };
@@ -298,7 +322,7 @@ const Donations = () => {
                     Total Donations
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {donations.length}
+                    {totalCount}
                   </dd>
                 </dl>
               </div>
@@ -318,7 +342,7 @@ const Donations = () => {
                     UPI Donations
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {donations.filter(d => d.type === 'upi').length}
+                    {typeCounts.upi || 0}
                   </dd>
                 </dl>
               </div>
@@ -338,7 +362,7 @@ const Donations = () => {
                     In-Kind Items
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {donations.filter(d => d.type === 'in-kind').reduce((acc, d) => acc + d.items.length, 0)}
+                    {totalItems}
                   </dd>
                 </dl>
               </div>
@@ -432,15 +456,18 @@ const Donations = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        {donation.type === 'in-kind' 
-                          ? `${donation.items.length} items` 
-                          : `₹${donation.amount?.toLocaleString('en-IN')}`}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {donation.event !== 'general' ? donation.event : 'General'}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">
+                          {donation.type === 'in-kind'
+                            ? `${donation.items.length} items`
+                            : `₹${donation.amount?.toLocaleString('en-IN')}`}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {donation.event !== 'general' ? donation.event : 'General'}
+                        </p>
+                      </div>
+                      <DonationReceipt donation={donation} />
                     </div>
                   </div>
                 </li>
@@ -693,6 +720,101 @@ const Donations = () => {
                                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
                                   />
                                 </div>
+
+                                {/* Expiry Tracking */}
+                                <div className="mt-3">
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Tracking</label>
+                                  <div className="flex gap-3 mb-2">
+                                    {[
+                                      { value: 'manual', label: 'Expiry Date' },
+                                      { value: 'calculated-from-mfg', label: 'Mfg Date + Shelf Life' },
+                                      { value: 'calculated-from-donation', label: 'Use Within' },
+                                    ].map(opt => (
+                                      <label key={opt.value} className="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="expiryDateSource"
+                                          value={opt.value}
+                                          checked={inKindItem.expiryDateSource === opt.value}
+                                          onChange={(e) => setInKindItem({...inKindItem, expiryDateSource: e.target.value, expiryDate: '', manufactureDate: '', shelfLifeValue: ''})}
+                                          className="text-temple-500"
+                                        />
+                                        {opt.label}
+                                      </label>
+                                    ))}
+                                  </div>
+
+                                  {inKindItem.expiryDateSource === 'manual' && (
+                                    <input
+                                      type="date"
+                                      value={inKindItem.expiryDate}
+                                      onChange={(e) => setInKindItem({...inKindItem, expiryDate: e.target.value})}
+                                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                    />
+                                  )}
+
+                                  {inKindItem.expiryDateSource === 'calculated-from-mfg' && (
+                                    <div className="flex gap-2">
+                                      <div className="flex-1">
+                                        <label className="block text-xs text-gray-500 mb-1">Manufacture Date</label>
+                                        <input
+                                          type="date"
+                                          value={inKindItem.manufactureDate}
+                                          onChange={(e) => setInKindItem({...inKindItem, manufactureDate: e.target.value})}
+                                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Shelf Life</label>
+                                        <div className="flex">
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            placeholder="e.g. 12"
+                                            value={inKindItem.shelfLifeValue}
+                                            onChange={(e) => setInKindItem({...inKindItem, shelfLifeValue: e.target.value})}
+                                            className="w-20 rounded-l-md border-gray-300 focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                          />
+                                          <select
+                                            value={inKindItem.shelfLifeUnit}
+                                            onChange={(e) => setInKindItem({...inKindItem, shelfLifeUnit: e.target.value})}
+                                            className="border-l-0 rounded-r-md border-gray-300 focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                          >
+                                            <option value="days">days</option>
+                                            <option value="months">months</option>
+                                            <option value="years">years</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {inKindItem.expiryDateSource === 'calculated-from-donation' && (
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Use within (from today)</label>
+                                      <div className="flex">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          placeholder="e.g. 2"
+                                          value={inKindItem.shelfLifeValue}
+                                          onChange={(e) => setInKindItem({...inKindItem, shelfLifeValue: e.target.value})}
+                                          className="w-24 rounded-l-md border-gray-300 focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                        />
+                                        <select
+                                          value={inKindItem.shelfLifeUnit}
+                                          onChange={(e) => setInKindItem({...inKindItem, shelfLifeUnit: e.target.value})}
+                                          className="border-l-0 rounded-r-md border-gray-300 focus:border-temple-500 focus:ring-temple-500 sm:text-sm"
+                                        >
+                                          <option value="days">days</option>
+                                          <option value="months">months</option>
+                                          <option value="years">years</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <button
                                   type="button"
                                   onClick={addInKindItem}
