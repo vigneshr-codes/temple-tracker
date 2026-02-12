@@ -55,12 +55,13 @@ fi
 
 echo -e "${GREEN}✅ Docker Compose is available${NC}"
 
-# Generate secure passwords
-echo -e "${YELLOW}🔐 Generating secure passwords...${NC}"
+# Generate secure passwords and keys
+echo -e "${YELLOW}🔐 Generating secure passwords and keys...${NC}"
 MONGO_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
 JWT_SECRET=$(openssl rand -base64 32 | tr -d /=+)
+SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32)
 
-echo -e "${GREEN}✅ Passwords generated${NC}"
+echo -e "${GREEN}✅ Passwords and keys generated${NC}"
 
 # Create docker-compose.yml
 echo -e "${YELLOW}📄 Creating deployment configuration...${NC}"
@@ -100,6 +101,7 @@ services:
       JWT_EXPIRE: 30d
       JWT_COOKIE_EXPIRE: 30
       FRONTEND_URL: http://localhost
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
     ports:
       - "3001:3001"
     depends_on:

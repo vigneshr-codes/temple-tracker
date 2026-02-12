@@ -5,8 +5,8 @@ services:
     container_name: temple-tracker-mongodb
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: templetracker
     ports:
       - "27017:27017"
@@ -18,7 +18,7 @@ services:
 
   # Backend API
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: temple-tracker-backend
@@ -26,9 +26,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      MONGODB_URI: mongodb://admin:password123@mongodb:27017/templetracker?authSource=admin
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      FRONTEND_URL: http://localhost:3000
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/templetracker?authSource=admin
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/templetracker?authSource=admin
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE: ${JWT_EXPIRE:-30d}
+      JWT_COOKIE_EXPIRE: ${JWT_COOKIE_EXPIRE:-30}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
     ports:
       - "3001:3001"
     depends_on:
@@ -40,13 +44,13 @@ services:
 
   # Frontend React App
   frontend:
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: temple-tracker-frontend
     restart: unless-stopped
     environment:
-      REACT_APP_API_URL: http://localhost:3001
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:3001}
     ports:
       - "3000:80"
     depends_on:

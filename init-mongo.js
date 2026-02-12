@@ -4,11 +4,12 @@ db = db.getSiblingDB('templetracker');
 // Create collections
 db.createCollection('users');
 db.createCollection('donations');
-db.createCollection('inventory');
+db.createCollection('inventoryitems');
 db.createCollection('expenses');
 db.createCollection('events');
 db.createCollection('funds');
 db.createCollection('settings');
+db.createCollection('notificationlogs');
 
 // Create indexes for better performance
 db.users.createIndex({ "email": 1 }, { unique: true });
@@ -17,8 +18,10 @@ db.donations.createIndex({ "donationId": 1 }, { unique: true });
 db.donations.createIndex({ "createdAt": -1 });
 db.expenses.createIndex({ "expenseId": 1 }, { unique: true });
 db.expenses.createIndex({ "status": 1 });
-db.inventory.createIndex({ "itemId": 1 }, { unique: true });
+db.inventoryitems.createIndex({ "itemId": 1 }, { unique: true });
 db.events.createIndex({ "eventId": 1 }, { unique: true });
+db.notificationlogs.createIndex({ "createdAt": -1 });
+db.notificationlogs.createIndex({ "trigger": 1, "status": 1 });
 
 // Create default admin user with pre-hashed password
 // Password hash for 'admin123' using bcrypt with salt rounds 10
@@ -32,21 +35,20 @@ const adminUser = {
   role: 'admin',
   isActive: true,
   permissions: {
-    donations: ['create', 'read', 'update', 'delete'],
-    inventory: ['create', 'read', 'update', 'delete'],
-    expenses: ['create', 'read', 'update', 'delete', 'approve'],
-    events: ['create', 'read', 'update', 'delete'],
-    funds: ['create', 'read', 'update', 'delete'],
-    users: ['create', 'read', 'update', 'delete'],
-    reports: ['read', 'export'],
-    settings: ['read', 'update']
+    donations: { create: true, read: true, update: true, delete: true },
+    inventory: { create: true, read: true, update: true, delete: true },
+    expenses: { create: true, read: true, update: true, delete: true, approve: true },
+    funds: { create: true, read: true, update: true, delete: true, allocate: true },
+    events: { create: true, read: true, update: true, delete: true },
+    users: { create: true, read: true, update: true, delete: true },
+    reports: { read: true, export: true, create: true }
   },
   createdAt: new Date(),
   updatedAt: new Date()
 };
 
 // Insert admin user if not exists
-const existingAdmin = db.users.findOne({ 
+const existingAdmin = db.users.findOne({
   $or: [
     { email: 'admin@gmail.com' },
     { username: 'admin' }
@@ -67,4 +69,4 @@ if (!existingAdmin) {
   print('ℹ️ Admin user already exists');
 }
 
-print('Database initialized successfully!');
+print('✅ Database initialized successfully!');

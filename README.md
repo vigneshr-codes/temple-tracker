@@ -1,170 +1,182 @@
-# 🏛️ Temple Tracker
+# Temple Tracker
 
-A comprehensive temple management system built with the MERN stack, featuring donation tracking, expense management, inventory control, event planning, and financial reporting.
+A comprehensive temple management system built with the MERN stack, featuring donation tracking, expense management, inventory control, event planning, and multi-channel donor notifications.
 
 ![Temple Tracker](https://img.shields.io/badge/Temple-Tracker-orange?style=for-the-badge)
 ![MERN Stack](https://img.shields.io/badge/MERN-Stack-blue?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/Docker-Ready-green?style=for-the-badge)
 
-## ✨ Features
+## Features
 
-### 💰 Financial Management
-- **Donation Tracking**: Record and categorize donations with receipts
+### Financial Management
+- **Donation Tracking** — Cash, UPI, and in-kind donations with receipt generation
   - PAN/Aadhaar collection for 80G tax receipts (ITR compliance)
-- **Expense Management**: Track expenses with admin approval workflow
-- **Fund Management**: Manage temple funds and allocations
-- **Financial Reports**: Generate detailed financial reports
+  - Unique donation IDs, fund allocation, QR code scanning
+- **Expense Management** — Expense entry with admin approval workflow and voucher printing
+- **Fund Management** — Fund categories, balance tracking, and allocation
+- **Financial Reports** — Export and print reports
 
-### 📦 Operations
-- **Inventory Management**: Track temple assets and supplies
-- **Event Planning**: Organize temple events and ceremonies
-- **User Management**: Role-based access control
-  - **Admin**: Full system access
-  - **Manager**: Operational management, limited admin
-  - **Volunteer**: Basic data entry
-  - **Viewer**: Read-only access
-- **Settings Management**: Configure temple preferences and notifications
+### Operations
+- **Inventory Management** — Track donated items, stock levels, usage logging, and donor attribution
+- **Event Management** — Schedule temple events, ceremonies, and manage participants
+- **Tamil Calendar** — Dashboard shows Gregorian + Tamil date (month, season)
 
-### 🔐 Security & Features
-- JWT Authentication
-- Role-based permissions
-- Secure password hashing
-- Input validation
+### User Management & Permissions
+- **Role-based access control** with four roles:
+  - **Admin** — Full system access including users and settings
+  - **Manager** — Operational management across all modules
+  - **Volunteer** — Data entry for donations, expenses, inventory
+  - **Viewer** — Read-only access
+- **Granular per-module permissions** — admins can customize exactly what each user can access
+
+### Notifications
+- **WhatsApp** (Meta Business API) — template-based messages to donors
+- **SMS** (MSG91 Flow API) — DLT-compliant SMS with template IDs
+- **Email** (SMTP/Nodemailer) — HTML email notifications
+- Triggers: donation created, inventory item used
+- Per-trigger channel preferences (enable/disable WhatsApp/SMS/Email per trigger)
+- Configurable message templates with variable placeholders (`{donorName}`, `{amount}`, etc.)
+- **Notification Log** — full audit trail of every notification attempt (sent/failed)
+- Test notification button from Settings
+
+### Settings
+- Temple profile — name (supports `|` for multi-line display), address, registration, PAN, logo upload (PNG/JPG/WebP)
+- Notification channel configuration (API keys stored encrypted in DB)
+- Notification preferences and message templates per trigger
+- Backup and restore
+
+### Security
+- JWT authentication via httpOnly cookies
+- AES-256-GCM encryption for stored API keys/secrets
+- Role-based access control with granular module permissions
+- Rate limiting on auth endpoints
+- Helmet.js security headers
 - CORS protection
-- Rate limiting
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
-- **React** (with Vite)
-- **Redux Toolkit** (State management)
-- **Tailwind CSS** (Styling)
-- **React Router** (Navigation)
-- **Axios** (HTTP client)
+- **React** with Vite
+- **Redux Toolkit** — state management
+- **Tailwind CSS** — styling
+- **React Router** — navigation
+- **i18next** — English/Tamil language support
 
 ### Backend
-- **Node.js** with Express
-- **MongoDB** with Mongoose
-- **JWT** (Authentication)
-- **Bcrypt** (Password hashing)
-- **Joi** (Validation)
-- **Multer** (File uploads)
+- **Node.js** + Express
+- **MongoDB** + Mongoose
+- **JWT** — authentication
+- **Bcrypt** — password hashing
+- **Nodemailer** — email
+- **Axios** — WhatsApp/SMS API calls
+- **Multer** — file uploads
 
 ### Deployment
 - **Docker** & **Docker Compose**
-- **Nginx** (Reverse proxy)
-- **Let's Encrypt** (SSL certificates)
-- **DigitalOcean** ready deployment
+- **Nginx** — reverse proxy
+- **Let's Encrypt** — SSL
 
-## 🚀 Quick Start
+## Quick Start
 
-### Development Setup
+### macOS (Docker Desktop)
+```bash
+chmod +x deploy-mac.sh
+./deploy-mac.sh
+```
 
-1. **Clone the repository**
-   \`\`\`bash
-   git clone https://github.com/yourusername/temple-tracker.git
-   cd temple-tracker
-   \`\`\`
+### Linux/Ubuntu
+```bash
+chmod +x deploy-anywhere.sh
+./deploy-anywhere.sh
+```
 
-2. **Start with Docker (Recommended)**
-   \`\`\`bash
-   docker-compose up --build
-   \`\`\`
+### Manual (Docker Compose)
+```bash
+# Create .env file in project root
+cp .env.prod .env
+# Edit .env with your values
+nano .env
 
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend: http://localhost:3001
+# Start services
+docker compose up -d
 
-## 🔑 Default Admin Credentials
+# Seed admin user
+docker exec temple-backend npm run seed:admin
+```
 
-- **Username**: \`admin\`
-- **Email**: \`admin@gmail.com\`
-- **Password**: \`admin123\`
+Access:
+- Frontend: http://localhost
+- Backend API: http://localhost:3001
 
-**⚠️ Important**: Change the password after first login!
+## Default Admin Credentials
 
-## 📦 Production Deployment
+- **Username**: `admin`
+- **Email**: `admin@gmail.com`
+- **Password**: `admin123`
 
-### DigitalOcean Deployment
+**Change the password after first login.**
 
-1. **Create a DigitalOcean Droplet** (Ubuntu 22.04)
-2. **Upload your code** to the server
-3. **Run deployment script**:
-   \`\`\`bash
-   ./deploy.sh your-domain.com
-   \`\`\`
-4. **Setup SSL** (if you have a domain):
-   \`\`\`bash
-   ./setup-ssl.sh your-domain.com
-   \`\`\`
+## Environment Variables
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+### Root `.env` (for Docker Compose)
+```env
+MONGO_ROOT_USERNAME=admin
+MONGO_ROOT_PASSWORD=your_strong_mongodb_password
+JWT_SECRET=your_jwt_secret_at_least_32_characters
+SETTINGS_ENCRYPTION_KEY=64_hex_chars  # openssl rand -hex 32
+FRONTEND_URL=http://localhost
+```
 
-## 📁 Project Structure
+### Backend `.env` (for local dev)
+```env
+NODE_ENV=development
+PORT=3001
+MONGODB_URI=mongodb://localhost:27017/templetracker
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRE=30d
+JWT_COOKIE_EXPIRE=30
+SETTINGS_ENCRYPTION_KEY=your_hex_key  # openssl rand -hex 32
+FRONTEND_URL=http://localhost:5173
+```
 
-\`\`\`
+> `SETTINGS_ENCRYPTION_KEY` must be a 64-character hex string (32 bytes). Used to AES-256-GCM encrypt WhatsApp/SMS API keys stored in the database.
+
+> Notification API credentials (WhatsApp access token, MSG91 key, SMTP password) are configured in Settings UI and stored encrypted — not in `.env`.
+
+## Project Structure
+
+```
 temple-tracker/
 ├── backend/
 │   ├── controllers/         # Route controllers
-│   ├── models/             # MongoDB models
-│   ├── routes/             # API routes
-│   ├── middleware/         # Custom middleware
-│   ├── config/             # Configuration files
-│   ├── seeders/            # Database seeders
-│   └── server.js           # Entry point
+│   ├── models/              # MongoDB models (incl. NotificationLog)
+│   ├── routes/              # API routes
+│   ├── middleware/          # Auth, permissions, rate limiting
+│   ├── utils/               # notification.js, encrypt.js
+│   ├── seeders/             # Admin user seeder
+│   └── server.js
 ├── frontend/
 │   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── pages/          # Page components
-│   │   ├── store/          # Redux store
-│   │   ├── services/       # API services
-│   │   └── utils/          # Utility functions
-│   └── public/             # Static assets
-├── docker-compose.yml      # Development Docker setup
-├── docker-compose.prod.yml # Production Docker setup
-├── deploy.sh               # Deployment script
-├── setup-ssl.sh            # SSL setup script
-└── DEPLOYMENT.md           # Deployment guide
-\`\`\`
+│   │   ├── components/      # Layout, DonationReceipt, QRScanner, etc.
+│   │   ├── pages/           # Dashboard, Donations, Expenses, Settings, etc.
+│   │   ├── features/        # Redux slices
+│   │   └── utils/           # permissions.js
+│   └── public/
+├── docker-compose.yml       # Development
+├── docker-compose.prod.yml  # Production
+├── deploy-mac.sh            # One-click Mac deployment
+├── deploy-anywhere.sh       # One-click Linux deployment
+└── .env.prod                # Environment variable template
+```
 
-## 🔧 Environment Variables
+## Production Deployment
 
-### Backend (.env)
-\`\`\`env
-NODE_ENV=development
-PORT=3001
-MONGO_URI=mongodb://localhost:27017/templetracker
-JWT_SECRET=your_jwt_secret_here
-JWT_EXPIRE=30d
-JWT_COOKIE_EXPIRE=30
-\`\`\`
+See [DEPLOYMENT.md](DEPLOYMENT.md) and [DOCKER_HUB_DEPLOYMENT.md](DOCKER_HUB_DEPLOYMENT.md) for full production setup including SSL, domain configuration, and server hardening.
 
-### Frontend (.env)
-\`\`\`env
-VITE_API_URL=http://localhost:3001/api
-VITE_APP_NAME=Temple Tracker
-VITE_TEMPLE_NAME=Sri Krishna Temple
-\`\`\`
+## License
 
-## 🚀 Getting Started
-
-1. Clone this repository
-2. Run \`docker-compose up --build\`
-3. Visit http://localhost:3000
-4. Login with admin credentials above
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+MIT License
 
 ---
 
-Made with ❤️ for temple management and community service.
+Made with care for temple management and community service.
