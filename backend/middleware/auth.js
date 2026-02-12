@@ -4,8 +4,11 @@ const User = require('../models/User');
 const protect = async (req, res, next) => {
   let token;
 
+  // Prefer Authorization header (API clients), fall back to httpOnly cookie (browser)
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
   }
 
   if (!token) {

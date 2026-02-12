@@ -23,10 +23,7 @@ const checkPermission = (module, action) => {
       if (!hasPermission) {
         return res.status(403).json({
           success: false,
-          message: `Access denied. You don't have permission to ${action} ${module}.`,
-          required: `${module}:${action}`,
-          userRole: user.role,
-          userPermissions: user.permissions
+          message: `Access denied. You don't have permission to ${action} ${module}.`
         });
       }
 

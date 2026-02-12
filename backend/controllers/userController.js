@@ -165,10 +165,17 @@ const updateUser = async (req, res, next) => {
       }
     }
 
-    // Remove password from update data if empty
-    const updateData = { ...req.body };
-    if (!updateData.password) {
-      delete updateData.password;
+    // Only allow safe profile fields; role/permissions changes require admin-only endpoint
+    const { name, email, phone } = req.body;
+    const updateData = { name, email, phone };
+    Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+
+    // Allow admins to also update role and permissions
+    if (req.user.role === 'admin') {
+      if (req.body.role !== undefined) updateData.role = req.body.role;
+      if (req.body.permissions !== undefined) updateData.permissions = req.body.permissions;
+      if (req.body.isActive !== undefined) updateData.isActive = req.body.isActive;
+      if (req.body.password) updateData.password = req.body.password;
     }
 
     const updatedUser = await User.findByIdAndUpdate(

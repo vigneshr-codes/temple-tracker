@@ -1,13 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import authService from '../../services/authService';
 
-// Get user from localStorage
+// Restore user profile from localStorage for UI state (auth is via httpOnly cookie)
 const user = JSON.parse(localStorage.getItem('temple_user'));
-const token = localStorage.getItem('temple_token');
 
 const initialState = {
   user: user || null,
-  token: token || null,
   isLoading: false,
   isSuccess: false,
   isError: false,
@@ -50,7 +48,7 @@ export const login = createAsyncThunk(
   }
 );
 
-// Logout user
+// Logout user — calls backend to clear httpOnly cookie
 export const logout = createAsyncThunk('auth/logout', async () => {
   await authService.logout();
 });
@@ -114,14 +112,12 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isSuccess = true;
         state.user = action.payload.data;
-        state.token = action.payload.token;
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
         state.isError = true;
         state.message = action.payload;
         state.user = null;
-        state.token = null;
       })
       .addCase(login.pending, (state) => {
         state.isLoading = true;
@@ -130,18 +126,15 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isSuccess = true;
         state.user = action.payload.data;
-        state.token = action.payload.token;
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
         state.isError = true;
         state.message = action.payload;
         state.user = null;
-        state.token = null;
       })
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
-        state.token = null;
       })
       .addCase(getMe.pending, (state) => {
         state.isLoading = true;
@@ -159,10 +152,9 @@ export const authSlice = createSlice({
       .addCase(updatePassword.pending, (state) => {
         state.isLoading = true;
       })
-      .addCase(updatePassword.fulfilled, (state, action) => {
+      .addCase(updatePassword.fulfilled, (state) => {
         state.isLoading = false;
         state.isSuccess = true;
-        state.token = action.payload.token;
         state.message = 'Password updated successfully';
       })
       .addCase(updatePassword.rejected, (state, action) => {

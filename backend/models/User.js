@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema({
       'Please add a valid email',
     ],
   },
+  phone: {
+    type: String,
+    trim: true,
+    match: [/^[6-9]\d{9}$/, 'Please add a valid 10-digit Indian mobile number']
+  },
   password: {
     type: String,
     required: [true, 'Please add a password'],
@@ -51,7 +56,8 @@ const userSchema = new mongoose.Schema({
       create: { type: Boolean, default: false },
       read: { type: Boolean, default: false },
       update: { type: Boolean, default: false },
-      delete: { type: Boolean, default: false }
+      delete: { type: Boolean, default: false },
+      approve: { type: Boolean, default: false }
     },
     funds: {
       create: { type: Boolean, default: false },
@@ -74,7 +80,8 @@ const userSchema = new mongoose.Schema({
     },
     reports: {
       read: { type: Boolean, default: false },
-      export: { type: Boolean, default: false }
+      export: { type: Boolean, default: false },
+      create: { type: Boolean, default: false }
     }
   },
   isActive: {
@@ -120,38 +127,38 @@ userSchema.methods.setRolePermissions = function() {
     admin: {
       donations: { create: true, read: true, update: true, delete: true },
       inventory: { create: true, read: true, update: true, delete: true },
-      expenses: { create: true, read: true, update: true, delete: true },
+      expenses: { create: true, read: true, update: true, delete: true, approve: true },
       funds: { create: true, read: true, update: true, delete: true, allocate: true },
       events: { create: true, read: true, update: true, delete: true },
       users: { create: true, read: true, update: true, delete: true },
-      reports: { read: true, export: true }
+      reports: { read: true, export: true, create: true }
     },
     manager: {
       donations: { create: true, read: true, update: true, delete: false },
       inventory: { create: true, read: true, update: true, delete: false },
-      expenses: { create: true, read: true, update: true, delete: false },
+      expenses: { create: true, read: true, update: true, delete: false, approve: true },
       funds: { create: false, read: true, update: false, delete: false, allocate: false },
       events: { create: true, read: true, update: true, delete: false },
       users: { create: false, read: true, update: false, delete: false },
-      reports: { read: true, export: true }
+      reports: { read: true, export: true, create: true }
     },
     volunteer: {
       donations: { create: true, read: true, update: false, delete: false },
       inventory: { create: true, read: true, update: true, delete: false },
-      expenses: { create: true, read: true, update: false, delete: false },
+      expenses: { create: true, read: true, update: false, delete: false, approve: false },
       funds: { create: false, read: true, update: false, delete: false, allocate: false },
       events: { create: false, read: true, update: false, delete: false },
       users: { create: false, read: false, update: false, delete: false },
-      reports: { read: true, export: false }
+      reports: { read: true, export: false, create: false }
     },
     viewer: {
       donations: { create: false, read: true, update: false, delete: false },
       inventory: { create: false, read: true, update: false, delete: false },
-      expenses: { create: false, read: true, update: false, delete: false },
+      expenses: { create: false, read: true, update: false, delete: false, approve: false },
       funds: { create: false, read: true, update: false, delete: false, allocate: false },
       events: { create: false, read: true, update: false, delete: false },
       users: { create: false, read: false, update: false, delete: false },
-      reports: { read: true, export: false }
+      reports: { read: true, export: false, create: false }
     }
   };
 

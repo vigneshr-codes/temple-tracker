@@ -15,7 +15,7 @@ const register = async (req, res, next) => {
       });
     }
 
-    const { name, username, email, password, role } = req.body;
+    const { name, username, email, password } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({
@@ -29,13 +29,13 @@ const register = async (req, res, next) => {
       });
     }
 
-    // Create user
+    // Create user — role is always 'staff' on public register; admins use /api/users
     const user = await User.create({
       name,
       username,
       email,
       password,
-      role: role || 'staff',
+      role: 'staff',
       createdBy: req.user ? req.user._id : null
     });
 
@@ -179,7 +179,6 @@ const sendTokenResponse = (user, statusCode, res) => {
     .cookie('token', token, options)
     .json({
       success: true,
-      token,
       data: {
         _id: user._id,
         name: user.name,

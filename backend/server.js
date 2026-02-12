@@ -3,6 +3,8 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 
 // Load env vars
@@ -46,23 +48,39 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
 }));
 
-// Security middleware - configure helmet to work with CORS
+// Security middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  crossOriginOpenerPolicy: { policy: 'unsafe-none' }
+  crossOriginResourcePolicy: { policy: 'same-site' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' }
 }));
 
-// Rate limiting
+// NoSQL injection sanitization — mutates in-place to avoid req.query getter restriction
+app.use((req, res, next) => {
+  if (req.body) mongoSanitize.sanitize(req.body);
+  if (req.params) mongoSanitize.sanitize(req.params);
+  if (req.query) mongoSanitize.sanitize(req.query);
+  next();
+});
+
+// General rate limit: 300 req / 15 min per IP
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
 
-// Body parser middleware
+// Strict auth rate limit: 10 attempts / 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many login attempts, please try again later.'
+});
+
+// Body parser + cookie parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Logging middleware
 app.use(logger);
@@ -72,7 +90,7 @@ app.use(morganMiddleware);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Mount routers
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/expenses', expenseRoutes);

@@ -41,7 +41,7 @@ router.route('/:id')
   .delete(checkPermission('expenses', 'delete'), deleteExpense);
 
 router.route('/:id/approve')
-  .put(checkPermission('expenses', 'update'), approveExpense);
+  .put(checkPermission('expenses', 'approve'), approveExpense);
 
 router.route('/:id/challan')
   .get(checkPermission('expenses', 'read'), generateChallan);

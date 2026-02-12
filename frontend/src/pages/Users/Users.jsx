@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { addNotification } from '../../features/ui/uiSlice';
+import authService from '../../services/authService';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -60,17 +61,7 @@ const AddUserModal = ({ onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(userForm)
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.post('/users', userForm);
       
       if (data.success) {
         dispatch(addNotification({
@@ -87,7 +78,7 @@ const AddUserModal = ({ onClose, onSuccess }) => {
     } catch (error) {
       dispatch(addNotification({
         type: 'error',
-        message: 'Network error occurred'
+        message: error.response?.data?.message || 'Network error occurred'
       }));
     } finally {
       setLoading(false);
@@ -253,12 +244,6 @@ const Users = () => {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('temple_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       const queryParams = new URLSearchParams({
         page: pagination.current.toString(),
         limit: '10'
@@ -267,14 +252,7 @@ const Users = () => {
       if (filters.role) queryParams.append('role', filters.role);
       if (filters.isActive !== '') queryParams.append('isActive', filters.isActive);
 
-      const response = await fetch(`/api/users?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get(`/users?${queryParams}`);
 
       if (data.success) {
         let filteredUsers = data.data;
@@ -342,16 +320,7 @@ const Users = () => {
   const handleDeleteUser = async (user) => {
     if (window.confirm(`Are you sure you want to deactivate user "${user.name}"?`)) {
       try {
-        const token = localStorage.getItem('temple_token');
-        const response = await fetch(`/api/users/${user._id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const data = await response.json();
+        const { data } = await authService.api.delete(`/users/${user._id}`);
         
         if (data.success) {
           dispatch(addNotification({
@@ -368,7 +337,7 @@ const Users = () => {
       } catch (error) {
         dispatch(addNotification({
           type: 'error',
-          message: 'Network error occurred'
+          message: error.response?.data?.message || 'Network error occurred'
         }));
       }
     }
@@ -377,16 +346,7 @@ const Users = () => {
   const handleActivateUser = async (user) => {
     if (window.confirm(`Are you sure you want to activate user "${user.name}"?`)) {
       try {
-        const token = localStorage.getItem('temple_token');
-        const response = await fetch(`/api/users/${user._id}/activate`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const data = await response.json();
+        const { data } = await authService.api.patch(`/users/${user._id}/activate`);
         
         if (data.success) {
           dispatch(addNotification({
@@ -403,7 +363,7 @@ const Users = () => {
       } catch (error) {
         dispatch(addNotification({
           type: 'error',
-          message: 'Network error occurred'
+          message: error.response?.data?.message || 'Network error occurred'
         }));
       }
     }

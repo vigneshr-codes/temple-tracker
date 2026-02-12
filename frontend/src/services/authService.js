@@ -2,27 +2,20 @@ import axios from 'axios';
 
 // Dynamic API URL based on current host
 const getApiUrl = () => {
-  // In development, use environment variable
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  
-  // In production, construct API URL based on current location
   const protocol = window.location.protocol;
   const hostname = window.location.hostname;
-  
-  // If frontend is on port 80/443 (production), backend is on 3001
   if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
     return `${protocol}//${hostname}:3001/api`;
   }
-  
-  // Default fallback
   return 'http://localhost:3001/api';
 };
 
 const API_URL = getApiUrl();
 
-// Create axios instance
+// Create axios instance — withCredentials sends the httpOnly auth cookie automatically
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -31,26 +24,11 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('temple_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor to handle auth errors
+// Response interceptor: on 401 clear user profile and redirect to login
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('temple_token');
       localStorage.removeItem('temple_user');
       window.location.href = '/login';
     }
@@ -61,53 +39,44 @@ api.interceptors.response.use(
 // Register user
 const register = async (userData) => {
   const response = await api.post('/auth/register', userData);
-  
-  if (response.data) {
-    localStorage.setItem('temple_token', response.data.token);
+  if (response.data?.data) {
     localStorage.setItem('temple_user', JSON.stringify(response.data.data));
   }
-  
   return response.data;
 };
 
-// Login user
+// Login user — token arrives as httpOnly cookie, we only store user profile for UI
 const login = async (userData) => {
   const response = await api.post('/auth/login', userData);
-  
-  if (response.data) {
-    localStorage.setItem('temple_token', response.data.token);
+  if (response.data?.data) {
     localStorage.setItem('temple_user', JSON.stringify(response.data.data));
   }
-  
   return response.data;
 };
 
-// Logout user
-const logout = () => {
-  localStorage.removeItem('temple_token');
-  localStorage.removeItem('temple_user');
+// Logout user — call backend to clear the httpOnly cookie, then clear local profile
+const logout = async () => {
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    // ignore network errors on logout
+  } finally {
+    localStorage.removeItem('temple_user');
+  }
 };
 
-// Get current user and update localStorage with latest data
+// Get current user and refresh local profile cache
 const getMe = async () => {
   const response = await api.get('/auth/me');
-
-  // Update localStorage with latest user data (including permissions)
-  if (response.data && response.data.data) {
+  if (response.data?.data) {
     localStorage.setItem('temple_user', JSON.stringify(response.data.data));
   }
-
   return response.data;
 };
 
 // Update password
 const updatePassword = async (passwordData) => {
   const response = await api.put('/auth/updatepassword', passwordData);
-  
-  if (response.data) {
-    localStorage.setItem('temple_token', response.data.token);
-  }
-  
   return response.data;
 };
 
@@ -117,7 +86,7 @@ const authService = {
   logout,
   getMe,
   updatePassword,
-  api, // Export api instance for use in other services
+  api,
 };
 
 export default authService;
