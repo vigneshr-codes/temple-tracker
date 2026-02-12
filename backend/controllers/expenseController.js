@@ -181,9 +181,15 @@ const updateExpense = async (req, res, next) => {
       });
     }
 
+    const { category, amount, description, vendor, billDate, paymentMethod,
+            notes, linkedInventory, receiptNumber } = req.body;
+    const allowedUpdate = { category, amount, description, vendor, billDate, paymentMethod,
+                            notes, linkedInventory, receiptNumber };
+    Object.keys(allowedUpdate).forEach(k => allowedUpdate[k] === undefined && delete allowedUpdate[k]);
+
     const updatedExpense = await Expense.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     )
     .populate('createdBy', 'name username')

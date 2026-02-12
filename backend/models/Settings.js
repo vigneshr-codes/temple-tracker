@@ -22,6 +22,10 @@ const settingsSchema = new mongoose.Schema({
     },
     logo: String, // File path or URL
     registrationNumber: String,
+    panNumber: String,
+    exemption80GNumber: String,
+    exemption12ANumber: String,
+    upiId: String,
     establishedYear: Number
   },
 
@@ -31,14 +35,30 @@ const settingsSchema = new mongoose.Schema({
     enableSMS: { type: Boolean, default: false },
     enableEmail: { type: Boolean, default: false },
     whatsAppConfig: {
-      apiKey: String,
+      apiKey: String,        // Meta Access Token (Bearer)
       phoneNumberId: String,
-      businessAccountId: String
+      businessAccountId: String,
+      templateNames: {
+        donationCash: { type: String, default: 'donation_thankyou_cash' },
+        donationUpi: { type: String, default: 'donation_thankyou_upi' },
+        donationInkind: { type: String, default: 'donation_thankyou_inkind' },
+        inventoryUsed: { type: String, default: 'inventory_item_used' },
+        expiryAlert: { type: String, default: 'expiry_alert' },
+        eventReminder: { type: String, default: 'event_reminder' }
+      }
     },
     smsConfig: {
-      provider: { type: String, enum: ['twilio', 'msg91', 'textlocal'], default: 'twilio' },
+      provider: { type: String, enum: ['msg91'], default: 'msg91' },
       apiKey: String,
-      senderId: String
+      senderId: String,
+      dltTemplateIds: {
+        donationCash: String,
+        donationUpi: String,
+        donationInkind: String,
+        inventoryUsed: String,
+        expiryAlert: String,
+        eventReminder: String
+      }
     },
     emailConfig: {
       host: String,
@@ -49,19 +69,86 @@ const settingsSchema = new mongoose.Schema({
       fromName: String
     },
     templates: {
-      donationThankYou: {
-        whatsapp: { type: String, default: 'Thank you {donorName} for your ₹{amount} donation to {templeName} for {event}. Your contribution supports our temple activities.' },
-        sms: { type: String, default: 'Thank you {donorName} for your ₹{amount} donation to {templeName}. Receipt: {receiptId}' },
-        email: { type: String, default: 'Dear {donorName}, Thank you for your generous donation of ₹{amount}.' }
+      donationCash: {
+        whatsappTemplateName: { type: String, default: 'donation_thankyou_cash' },
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Dear {donorName}, thank you for your cash donation of Rs.{amount} to {templeName} for {event}. Receipt: {receiptId}.' },
+        emailSubject: { type: String, default: 'Thank you for your donation - {receiptId}' },
+        emailBody: { type: String, default: '<p>Dear {donorName},</p><p>Thank you for your generous cash donation of <strong>₹{amount}</strong> to {templeName} for <em>{event}</em>.</p><p>Receipt ID: {receiptId}</p><p>Date: {date}</p><p>With gratitude,<br/>{templeName}</p>' }
       },
-      inventoryUsage: {
-        whatsapp: { type: String, default: 'Dear {donorName}, your donated {itemType} of {quantity} was used today for {purpose} in {templeName}. Thank you!' },
-        sms: { type: String, default: 'Your donated {itemType} was used for {purpose} at {templeName}. Thank you for your support!' }
+      donationUpi: {
+        whatsappTemplateName: { type: String, default: 'donation_thankyou_upi' },
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Dear {donorName}, thank you for your UPI donation of Rs.{amount} to {templeName}. Receipt: {receiptId}.' },
+        emailSubject: { type: String, default: 'UPI Donation Confirmed - {receiptId}' },
+        emailBody: { type: String, default: '<p>Dear {donorName},</p><p>Your UPI donation of <strong>₹{amount}</strong> to {templeName} has been confirmed.</p><p>Receipt ID: {receiptId}</p><p>Date: {date}</p><p>With gratitude,<br/>{templeName}</p>' }
+      },
+      donationInkind: {
+        whatsappTemplateName: { type: String, default: 'donation_thankyou_inkind' },
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Dear {donorName}, thank you for your in-kind donation to {templeName} for {event}. Items: {itemList}. Date: {date}.' },
+        emailSubject: { type: String, default: 'In-Kind Donation Received - {date}' },
+        emailBody: { type: String, default: '<p>Dear {donorName},</p><p>Thank you for your in-kind donation to {templeName} for <em>{event}</em>.</p><p>Items donated: {itemList}</p><p>Date: {date}</p><p>With gratitude,<br/>{templeName}</p>' }
+      },
+      inventoryUsed: {
+        whatsappTemplateName: { type: String, default: 'inventory_item_used' },
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Dear {donorName}, your donated {itemType} ({quantity} {unit}) was used for {purpose} at {templeName} on {date}. Thank you!' },
+        emailSubject: { type: String, default: 'Your Donated Items Were Used at {templeName}' },
+        emailBody: { type: String, default: '<p>Dear {donorName},</p><p>Your donated <strong>{itemType}</strong> ({quantity} {unit}) was used for <em>{purpose}</em> at {templeName}.</p><p>Date: {date}</p><p>Your contribution is making a difference!</p><p>With gratitude,<br/>{templeName}</p>' }
+      },
+      expiryAlert: {
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Alert: {itemName} ({quantity}) at {templeName} expires on {expiryDate} ({daysLeft} days left).' },
+        emailSubject: { type: String, default: 'Expiry Alert: {itemName} expires in {daysLeft} days' },
+        emailBody: { type: String, default: '<p>Expiry Alert</p><p><strong>{itemName}</strong> (Qty: {quantity}) will expire on <strong>{expiryDate}</strong> ({daysLeft} days left).</p><p>Please take necessary action.</p>' }
       },
       eventReminder: {
-        whatsapp: { type: String, default: 'Reminder: {eventName} is on {eventDate} at {templeName}. Your participation is valuable.' },
-        sms: { type: String, default: 'Reminder: {eventName} on {eventDate} at {templeName}.' }
+        whatsappTemplateName: { type: String, default: 'event_reminder' },
+        smsTemplateId: String,
+        smsTemplateText: { type: String, default: 'Reminder: {eventName} at {templeName} is on {eventDate} ({daysLeft} days left).' },
+        emailSubject: { type: String, default: 'Event Reminder: {eventName} on {eventDate}' },
+        emailBody: { type: String, default: '<p>Event Reminder</p><p><strong>{eventName}</strong> at {templeName} is scheduled for <strong>{eventDate}</strong>.</p><p>{daysLeft} days remaining.</p>' }
       }
+    },
+    notificationPreferences: {
+      donation: {
+        enabled: { type: Boolean, default: true },
+        channels: {
+          whatsapp: { type: Boolean, default: true },
+          sms: { type: Boolean, default: false },
+          email: { type: Boolean, default: false }
+        }
+      },
+      inventoryUsed: {
+        enabled: { type: Boolean, default: true },
+        channels: {
+          whatsapp: { type: Boolean, default: true },
+          sms: { type: Boolean, default: false },
+          email: { type: Boolean, default: false }
+        }
+      },
+      expiryAlert: {
+        enabled: { type: Boolean, default: false },
+        daysBefore: { type: Number, default: 7 },
+        channels: {
+          sms: { type: Boolean, default: false },
+          email: { type: Boolean, default: true }
+        }
+      },
+      eventReminder: {
+        enabled: { type: Boolean, default: false },
+        daysBefore: { type: Number, default: 3 },
+        channels: {
+          whatsapp: { type: Boolean, default: false },
+          sms: { type: Boolean, default: false },
+          email: { type: Boolean, default: true }
+        }
+      }
+    },
+    adminContact: {
+      phone: String,
+      email: String
     }
   },
 

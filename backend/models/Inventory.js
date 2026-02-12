@@ -12,7 +12,6 @@ const inventorySchema = new mongoose.Schema({
   },
   itemType: {
     type: String,
-    enum: ['rice', 'oil', 'ghee', 'vegetables', 'lentils', 'sugar', 'salt', 'dal', 'wheat', 'flour', 'coconut', 'other'],
     required: true,
   },
   description: String,
@@ -23,7 +22,7 @@ const inventorySchema = new mongoose.Schema({
   },
   unit: {
     type: String,
-    enum: ['kg', 'liters', 'units', 'grams'],
+    enum: ['kg', 'liters', 'units', 'grams', 'pieces', 'packets', 'bags'],
     required: true,
   },
   remainingQuantity: {
@@ -32,6 +31,21 @@ const inventorySchema = new mongoose.Schema({
     min: [0, 'Remaining quantity cannot be negative'],
   },
   expiryDate: Date,
+  expiryDateSource: {
+    type: String,
+    enum: ['manual', 'calculated-from-mfg', 'calculated-from-donation'],
+    default: 'manual',
+  },
+  manufactureDate: Date,
+  shelfLifeValue: {
+    type: Number,
+    min: [1, 'Shelf life must be at least 1'],
+  },
+  shelfLifeUnit: {
+    type: String,
+    enum: ['days', 'months', 'years'],
+    default: 'months',
+  },
   storageLocation: {
     type: String,
     default: 'Main Storage',
@@ -58,7 +72,7 @@ const inventorySchema = new mongoose.Schema({
     },
     purpose: {
       type: String,
-      enum: ['anadhanam', 'daily-prasadam', 'cooking', 'festival', 'puja', 'maintenance', 'distribution', 'special-event', 'other'],
+      enum: ['anadhanam', 'daily-prasadam', 'cooking', 'festival', 'puja', 'maintenance', 'distribution', 'special-event', 'special-occasion', 'emergency-relief', 'other'],
       required: true,
     },
     usedBy: {

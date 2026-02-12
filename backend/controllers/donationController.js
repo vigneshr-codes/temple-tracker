@@ -1,8 +1,38 @@
 const { validationResult } = require('express-validator');
 const Donation = require('../models/Donation');
 const Inventory = require('../models/Inventory');
+const Settings = require('../models/Settings');
 const { generateBarcodeData, createBarcodeLabel } = require('../utils/barcode');
-const { sendNotification: sendNotificationUtil, templates } = require('../utils/notification');
+const { sendNotification, templates } = require('../utils/notification');
+
+// Fetch temple name from DB settings, fallback to env
+const getTempleName = async () => {
+  try {
+    const settings = await Settings.findOne().select('templeConfig.name');
+    return settings?.templeConfig?.name || process.env.TEMPLE_NAME || 'Temple';
+  } catch {
+    return process.env.TEMPLE_NAME || 'Temple';
+  }
+};
+
+// Resolve effective expiry date based on source mode
+const resolveExpiryDate = (item, donationDate) => {
+  const addDuration = (baseDate, value, unit) => {
+    const d = new Date(baseDate);
+    if (unit === 'days')   d.setDate(d.getDate() + value);
+    if (unit === 'months') d.setMonth(d.getMonth() + value);
+    if (unit === 'years')  d.setFullYear(d.getFullYear() + value);
+    return d;
+  };
+
+  if (item.expiryDateSource === 'calculated-from-mfg' && item.manufactureDate && item.shelfLifeValue) {
+    return addDuration(item.manufactureDate, item.shelfLifeValue, item.shelfLifeUnit || 'months');
+  }
+  if (item.expiryDateSource === 'calculated-from-donation' && item.shelfLifeValue) {
+    return addDuration(donationDate || new Date(), item.shelfLifeValue, item.shelfLifeUnit || 'months');
+  }
+  return item.expiryDate || null;
+};
 
 // Helper function to normalize item types
 const normalizeItemType = (itemType) => {
@@ -10,23 +40,87 @@ const normalizeItemType = (itemType) => {
   
   const normalized = itemType.toLowerCase().trim();
   
-  // Map common variants to standard enum values
   const mappings = {
+    // Lentils / Dal
     'dal': 'lentils',
     'dhal': 'lentils',
     'daal': 'lentils',
     'lentil': 'lentils',
     'pulses': 'lentils',
-    'rava': 'other',
-    'semolina': 'other',
-    'jaggery': 'sugar',
-    'gud': 'sugar',
-    'gur': 'sugar',
+
+    // Sugar / Jaggery
+    'jaggery': 'jaggery',
+    'gud': 'jaggery',
+    'gur': 'jaggery',
+    'vellam': 'jaggery',
+
+    // Oil variants
     'coconut oil': 'oil',
     'groundnut oil': 'oil',
     'sunflower oil': 'oil',
     'sesame oil': 'oil',
     'mustard oil': 'oil',
+    'gingelly oil': 'oil',
+    'nallennai': 'oil',
+
+    // Dairy
+    'whole milk': 'milk',
+    'cow milk': 'milk',
+    'buffalo milk': 'milk',
+    'paasumpal': 'milk',
+    'milk powder': 'milk powder',
+    'skimmed milk powder': 'milk powder',
+    'full cream milk powder': 'milk powder',
+    'curd': 'curd',
+    'yogurt': 'curd',
+    'yoghurt': 'curd',
+    'thayir': 'curd',
+    'buttermilk': 'buttermilk',
+    'moru': 'buttermilk',
+    'butter': 'butter',
+    'vennai': 'butter',
+    'white butter': 'butter',
+    'ghee': 'ghee',
+    'nei': 'ghee',
+    'cow ghee': 'ghee',
+    'paneer': 'paneer',
+    'cottage cheese': 'paneer',
+
+    // Grains / Flour
+    'rava': 'semolina',
+    'semolina': 'semolina',
+    'sooji': 'semolina',
+    'maida': 'flour',
+    'wheat flour': 'flour',
+    'rice flour': 'rice flour',
+    'idli rice': 'rice',
+    'ponni rice': 'rice',
+    'basmati': 'rice',
+    'basmati rice': 'rice',
+    'broken rice': 'rice',
+
+    // Coconut
+    'coconut': 'coconut',
+    'dry coconut': 'coconut',
+    'thengai': 'coconut',
+
+    // Vegetables / Fruits
+    'banana': 'fruits',
+    'plantain': 'fruits',
+    'mango': 'fruits',
+    'apple': 'fruits',
+    'orange': 'fruits',
+    'tomato': 'vegetables',
+    'onion': 'vegetables',
+    'potato': 'vegetables',
+
+    // Other temple items
+    'camphor': 'camphor',
+    'incense': 'incense',
+    'flowers': 'flowers',
+    'flower': 'flowers',
+    'poo': 'flowers',
+    'agarbatti': 'incense',
   };
   
   return mappings[normalized] || normalized;
@@ -102,7 +196,11 @@ const createDonation = async (req, res, next) => {
           quantity: item.quantity,
           unit: item.unit,
           remainingQuantity: item.quantity,
-          expiryDate: item.expiryDate,
+          expiryDate: resolveExpiryDate(item, donation.createdAt),
+          expiryDateSource: item.expiryDateSource || 'manual',
+          manufactureDate: item.manufactureDate || null,
+          shelfLifeValue: item.shelfLifeValue || null,
+          shelfLifeUnit: item.shelfLifeUnit || 'months',
           storageInstructions: item.storageInstructions,
           donor: {
             name: donation.donor.name,
@@ -123,31 +221,20 @@ const createDonation = async (req, res, next) => {
       }
     }
 
-    // Send notification to donor
-    try {
-      let notificationTemplate;
-      if (donation.type === 'cash' || donation.type === 'upi') {
-        notificationTemplate = templates.donationConfirmation(
-          donation.donor.name,
-          donation.amount,
-          process.env.TEMPLE_NAME,
-          donation.event !== 'general' ? donation.event : null
-        );
-      } else {
-        const itemsList = donation.items.map(item => `${item.quantity} ${item.unit} ${item.itemType}`).join(', ');
-        notificationTemplate = {
-          subject: `In-kind Donation Receipt - ${process.env.TEMPLE_NAME}`,
-          message: `Thank you ${donation.donor.name} for donating ${itemsList} to ${process.env.TEMPLE_NAME}${donation.event !== 'general' ? ` for ${donation.event}` : ''}. Items have been received and barcoded for tracking. Om Namah Shivaya!`
-        };
-      }
-
-      // Try WhatsApp first, then SMS as fallback
-      await sendNotificationUtil('whatsapp', donation.donor.mobile, notificationTemplate.subject, notificationTemplate.message);
-      donation.notificationSent = true;
-      await donation.save();
-    } catch (notificationError) {
-      console.error('Failed to send notification:', notificationError);
-    }
+    // Send notification to donor (fire and forget — logged internally)
+    sendNotification('donation', {
+      donor: donation.donor,
+      type: donation.type,
+      amount: donation.amount,
+      items: donation.items,
+      event: donation.event,
+      receiptId: donation.donationId,
+      referenceId: donation._id,
+      referenceType: 'Donation'
+    }, req.user).then(() => {
+      // Mark notificationSent flag after async send
+      Donation.findByIdAndUpdate(donation._id, { notificationSent: true }).catch(() => {});
+    }).catch(() => {});
 
     const populatedDonation = await Donation.findById(donation._id).populate('receivedBy', 'name username');
 
@@ -185,6 +272,7 @@ const getDonations = async (req, res, next) => {
     }
 
     const donations = await Donation.find(filter)
+      .select('-donor.aadhaarNumber')   // Aadhaar excluded from list — only admins see it on single record
       .populate('receivedBy', 'name username')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -199,6 +287,16 @@ const getDonations = async (req, res, next) => {
     ]);
     const totalAmount = totalAmountResult.length > 0 ? totalAmountResult[0].total : 0;
 
+    // Count donations per type across the full filtered collection
+    const typeCountsResult = await Donation.aggregate([
+      { $match: filter },
+      { $group: { _id: '$type', count: { $sum: 1 } } }
+    ]);
+    const typeCounts = typeCountsResult.reduce((acc, { _id, count }) => {
+      acc[_id] = count;
+      return acc;
+    }, {});
+
     res.status(200).json({
       success: true,
       data: donations,
@@ -207,7 +305,8 @@ const getDonations = async (req, res, next) => {
         pages: Math.ceil(totalCount / limit),
         total: totalCount
       },
-      totalAmount
+      totalAmount,
+      typeCounts
     });
   } catch (error) {
     next(error);
@@ -251,9 +350,16 @@ const updateDonation = async (req, res, next) => {
       });
     }
 
+    const { donor, type, amount, items, notes, event, isAnonymous, isCorpusDonation,
+            chequeDetails, upiDetails, neftDetails, rtgsDetails } = req.body;
+    const allowedUpdate = { donor, type, amount, items, notes, event, isAnonymous, isCorpusDonation,
+                            chequeDetails, upiDetails, neftDetails, rtgsDetails };
+    // Remove undefined keys so existing values aren't overwritten with undefined
+    Object.keys(allowedUpdate).forEach(k => allowedUpdate[k] === undefined && delete allowedUpdate[k]);
+
     const updatedDonation = await Donation.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     ).populate('receivedBy', 'name username');
 
@@ -310,6 +416,7 @@ const generateReceipt = async (req, res, next) => {
     await donation.save();
 
     // Generate PDF receipt (placeholder - would need PDF generation library)
+    const settings = await Settings.findOne().select('templeConfig');
     const receiptData = {
       donationId: donation.donationId,
       donor: donation.donor,
@@ -318,8 +425,8 @@ const generateReceipt = async (req, res, next) => {
       items: donation.items,
       date: donation.createdAt,
       receivedBy: donation.receivedBy.name,
-      templeName: process.env.TEMPLE_NAME,
-      templeAddress: process.env.TEMPLE_ADDRESS
+      templeName: settings?.templeConfig?.name || process.env.TEMPLE_NAME,
+      templeAddress: settings?.templeConfig?.address || process.env.TEMPLE_ADDRESS
     };
 
     res.status(200).json({
@@ -346,24 +453,17 @@ const sendDonationNotification = async (req, res, next) => {
       });
     }
 
-    let notificationTemplate;
-    if (donation.type === 'cash' || donation.type === 'upi') {
-      notificationTemplate = templates.donationConfirmation(
-        donation.donor.name,
-        donation.amount,
-        process.env.TEMPLE_NAME,
-        donation.event !== 'general' ? donation.event : null
-      );
-    } else {
-      const itemsList = donation.items.map(item => `${item.quantity} ${item.unit} ${item.itemType}`).join(', ');
-      notificationTemplate = {
-        subject: `In-kind Donation Receipt - ${process.env.TEMPLE_NAME}`,
-        message: `Thank you ${donation.donor.name} for donating ${itemsList} to ${process.env.TEMPLE_NAME}. Items received successfully!`
-      };
-    }
+    await sendNotification('donation', {
+      donor: donation.donor,
+      type: donation.type,
+      amount: donation.amount,
+      items: donation.items,
+      event: donation.event,
+      receiptId: donation.donationId,
+      referenceId: donation._id,
+      referenceType: 'Donation'
+    }, req.user);
 
-    await sendNotificationUtil('whatsapp', donation.donor.mobile, notificationTemplate.subject, notificationTemplate.message);
-    
     donation.notificationSent = true;
     await donation.save();
 

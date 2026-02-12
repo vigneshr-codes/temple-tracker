@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { addNotification } from '../../features/ui/uiSlice';
 import { hasPermission } from '../../utils/permissions';
+import { uploadLogo, BACKEND_STATIC_URL } from '../../features/settings/settingsSlice';
+import authService from '../../services/authService';
 import {
   CogIcon,
   BuildingLibraryIcon,
@@ -15,7 +17,8 @@ import {
   CloudArrowUpIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  XMarkIcon
+  XMarkIcon,
+  ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 
 const Settings = () => {
@@ -46,13 +49,14 @@ const Settings = () => {
   const tabs = [
     { id: 'temple', name: 'Temple Config', icon: BuildingLibraryIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
-    { id: 'system', name: 'System Preferences', icon: CogIcon },
-    { id: 'financial', name: 'Financial', icon: CurrencyDollarIcon },
-    { id: 'inventory', name: 'Inventory', icon: ArchiveBoxIcon },
-    { id: 'events', name: 'Events', icon: CalendarDaysIcon },
-    { id: 'security', name: 'Security', icon: ShieldCheckIcon },
-    { id: 'integrations', name: 'Integrations', icon: LinkIcon },
-    { id: 'backup', name: 'Backup & System', icon: CloudArrowUpIcon }
+    { id: 'notif-logs', name: 'Notification Logs', icon: ClipboardDocumentListIcon },
+    // { id: 'system', name: 'System Preferences', icon: CogIcon },
+    // { id: 'financial', name: 'Financial', icon: CurrencyDollarIcon },
+    // { id: 'inventory', name: 'Inventory', icon: ArchiveBoxIcon },
+    // { id: 'events', name: 'Events', icon: CalendarDaysIcon },
+    // { id: 'security', name: 'Security', icon: ShieldCheckIcon },
+    // { id: 'integrations', name: 'Integrations', icon: LinkIcon },
+    // { id: 'backup', name: 'Backup & System', icon: CloudArrowUpIcon }
   ];
 
   useEffect(() => {
@@ -62,27 +66,14 @@ const Settings = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/settings', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await authService.api.get('/settings');
       if (data.success) {
         setSettings(data.data);
-      } else {
-        dispatch(addNotification({
-          type: 'error',
-          message: data.message || 'Failed to fetch settings'
-        }));
       }
     } catch (error) {
       dispatch(addNotification({
         type: 'error',
-        message: 'Failed to fetch settings'
+        message: error.response?.data?.message || 'Failed to fetch settings'
       }));
     } finally {
       setLoading(false);
@@ -92,69 +83,28 @@ const Settings = () => {
   const updateSettings = async (section, data) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch(`/api/settings/${section}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-
-      const result = await response.json();
+      const { data: result } = await authService.api.put(`/settings/${section}`, data);
       if (result.success) {
         setSettings(result.data);
-        dispatch(addNotification({
-          type: 'success',
-          message: result.message || 'Settings updated successfully'
-        }));
-      } else {
-        dispatch(addNotification({
-          type: 'error',
-          message: result.message || 'Failed to update settings'
-        }));
+        dispatch(addNotification({ type: 'success', message: result.message || 'Settings updated successfully' }));
       }
     } catch (error) {
-      dispatch(addNotification({
-        type: 'error',
-        message: 'Failed to update settings'
-      }));
+      dispatch(addNotification({ type: 'error', message: error.response?.data?.message || 'Failed to update settings' }));
     } finally {
       setSaving(false);
     }
   };
 
-  const testNotification = async (type, recipient) => {
+  const testNotification = async (channel, recipient) => {
     try {
       setTestingNotification(true);
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/settings/test-notification', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ type, recipient })
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        dispatch(addNotification({
-          type: 'success',
-          message: result.message
-        }));
-      } else {
-        dispatch(addNotification({
-          type: 'error',
-          message: result.message || 'Test notification failed'
-        }));
-      }
-    } catch (error) {
+      const { data } = await authService.api.post('/settings/test-notification', { channel, recipient });
       dispatch(addNotification({
-        type: 'error',
-        message: 'Failed to send test notification'
+        type: data.success ? 'success' : 'error',
+        message: data.message
       }));
+    } catch (error) {
+      dispatch(addNotification({ type: 'error', message: error.response?.data?.message || 'Failed to send test notification' }));
     } finally {
       setTestingNotification(false);
     }
@@ -224,63 +174,40 @@ const Settings = () => {
           />
         )}
         {activeTab === 'notifications' && (
-          <NotificationsTab 
-            settings={settings} 
+          <NotificationsTab
+            settings={settings}
             updateSettings={updateSettings}
             testNotification={testNotification}
             saving={saving}
             testing={testingNotification}
           />
         )}
+        {activeTab === 'notif-logs' && (
+          <NotificationLogsTab />
+        )}
+        {/* TODO: implement remaining tabs
         {activeTab === 'system' && (
-          <SystemPreferencesTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <SystemPreferencesTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'financial' && (
-          <FinancialTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <FinancialTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'inventory' && (
-          <InventoryTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <InventoryTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'events' && (
-          <EventsTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <EventsTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'security' && (
-          <SecurityTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <SecurityTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'integrations' && (
-          <IntegrationsTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <IntegrationsTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
         {activeTab === 'backup' && (
-          <BackupTab 
-            settings={settings} 
-            updateSettings={updateSettings}
-            saving={saving}
-          />
+          <BackupTab settings={settings} updateSettings={updateSettings} saving={saving} />
         )}
+        */}
       </div>
     </div>
   );
@@ -288,6 +215,13 @@ const Settings = () => {
 
 // Placeholder components for each tab - will be implemented next
 const TempleConfigTab = ({ settings, updateSettings, saving }) => {
+  const dispatch = useDispatch();
+  const { templeConfig } = useSelector(state => state.settings);
+  const fileInputRef = useRef(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     address: {
@@ -303,6 +237,10 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
       website: ''
     },
     registrationNumber: '',
+    panNumber: '',
+    exemption80GNumber: '',
+    exemption12ANumber: '',
+    upiId: '',
     establishedYear: ''
   });
 
@@ -323,6 +261,10 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
           website: settings.templeConfig.contact?.website || ''
         },
         registrationNumber: settings.templeConfig.registrationNumber || '',
+        panNumber: settings.templeConfig.panNumber || '',
+        exemption80GNumber: settings.templeConfig.exemption80GNumber || '',
+        exemption12ANumber: settings.templeConfig.exemption12ANumber || '',
+        upiId: settings.templeConfig.upiId || '',
         establishedYear: settings.templeConfig.establishedYear || ''
       });
     }
@@ -351,6 +293,33 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
     await updateSettings('templeConfig', formData);
   };
 
+  const handleLogoFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setUploadingLogo(true);
+    const formData = new FormData();
+    formData.append('logo', logoFile);
+    const result = await dispatch(uploadLogo(formData));
+    if (result.meta.requestStatus === 'fulfilled') {
+      dispatch(addNotification({ type: 'success', message: 'Logo uploaded successfully' }));
+      setLogoFile(null);
+      setLogoPreview(null);
+    } else {
+      dispatch(addNotification({ type: 'error', message: result.payload || 'Logo upload failed' }));
+    }
+    setUploadingLogo(false);
+  };
+
+  const currentLogoUrl = templeConfig?.logo
+    ? `${BACKEND_STATIC_URL}${templeConfig.logo}`
+    : null;
+
   return (
     <div className="bg-white shadow rounded-lg">
       <div className="px-6 py-4 border-b border-gray-200">
@@ -359,8 +328,58 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
           Configure basic temple information and contact details
         </p>
       </div>
-      
+
       <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
+        {/* Temple Logo */}
+        <div>
+          <h4 className="text-md font-medium text-gray-900 mb-4">Temple Logo</h4>
+          <div className="flex items-center space-x-6">
+            <div className="h-20 w-20 rounded-xl overflow-hidden bg-gradient-to-br from-saffron-100 to-temple-100 flex items-center justify-center border-2 border-gray-200 flex-shrink-0">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo preview" className="h-full w-full object-cover" />
+              ) : currentLogoUrl ? (
+                <img src={currentLogoUrl} alt="Temple logo" className="h-full w-full object-cover" />
+              ) : (
+                <svg className="h-10 w-10 text-temple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              )}
+            </div>
+            <div className="flex flex-col space-y-2">
+              <p className="text-sm text-gray-500">PNG, JPG, WebP up to 2MB</p>
+              <div className="flex items-center space-x-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleLogoFileChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+                >
+                  Choose File
+                </button>
+                {logoFile && (
+                  <button
+                    type="button"
+                    onClick={handleLogoUpload}
+                    disabled={uploadingLogo}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+                  >
+                    {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                  </button>
+                )}
+              </div>
+              {logoFile && (
+                <p className="text-xs text-gray-500">Selected: {logoFile.name}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Temple Basic Information */}
         <div>
           <h4 className="text-md font-medium text-gray-900 mb-4">Basic Information</h4>
@@ -392,6 +411,62 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
               />
             </div>
             
+            <div>
+              <label htmlFor="panNumber" className="block text-sm font-medium text-gray-700">
+                PAN Number
+              </label>
+              <input
+                type="text"
+                id="panNumber"
+                value={formData.panNumber}
+                onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
+                placeholder="AAAAA0000A"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="exemption80GNumber" className="block text-sm font-medium text-gray-700">
+                80G UR Number
+              </label>
+              <input
+                type="text"
+                id="exemption80GNumber"
+                value={formData.exemption80GNumber}
+                onChange={(e) => handleInputChange('exemption80GNumber', e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
+                placeholder="AAAAA0000A/80G/2024-25/0000"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="exemption12ANumber" className="block text-sm font-medium text-gray-700">
+                12A UR Number
+              </label>
+              <input
+                type="text"
+                id="exemption12ANumber"
+                value={formData.exemption12ANumber}
+                onChange={(e) => handleInputChange('exemption12ANumber', e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
+                placeholder="AAAAA0000A/12A/2024-25/0000"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="upiId" className="block text-sm font-medium text-gray-700">
+                UPI ID
+              </label>
+              <input
+                type="text"
+                id="upiId"
+                value={formData.upiId}
+                onChange={(e) => handleInputChange('upiId', e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
+                placeholder="templename@upi"
+              />
+            </div>
+
             <div>
               <label htmlFor="establishedYear" className="block text-sm font-medium text-gray-700">
                 Established Year
@@ -561,436 +636,533 @@ const TempleConfigTab = ({ settings, updateSettings, saving }) => {
 };
 
 const NotificationsTab = ({ settings, updateSettings, testNotification, saving, testing }) => {
+  const TEMPLATE_KEYS = [
+    { key: 'donationCash',   label: 'Donation — Cash',     vars: ['{donorName}','{amount}','{templeName}','{event}','{receiptId}','{date}'] },
+    { key: 'donationUpi',    label: 'Donation — UPI',      vars: ['{donorName}','{amount}','{templeName}','{event}','{receiptId}','{date}'] },
+    { key: 'donationInkind', label: 'Donation — In-Kind',  vars: ['{donorName}','{itemList}','{templeName}','{event}','{date}'] },
+    { key: 'inventoryUsed',  label: 'Inventory Item Used', vars: ['{donorName}','{itemType}','{quantity}','{unit}','{purpose}','{templeName}','{date}'] },
+    { key: 'expiryAlert',    label: 'Expiry Alert',        vars: ['{itemName}','{quantity}','{expiryDate}','{daysLeft}','{templeName}'] },
+    { key: 'eventReminder',  label: 'Event Reminder',      vars: ['{eventName}','{eventDate}','{daysLeft}','{templeName}'] },
+  ];
+
+  const PREF_TRIGGERS = [
+    { key: 'donation',      label: 'Donation Received',   recipient: 'Donor', channels: ['whatsapp','sms','email'] },
+    { key: 'inventoryUsed', label: 'Inventory Item Used', recipient: 'Donor', channels: ['whatsapp','sms','email'] },
+    { key: 'expiryAlert',   label: 'Expiry Alert',        recipient: 'Admin', channels: ['sms','email'], hasDays: true },
+    { key: 'eventReminder', label: 'Event Reminder',      recipient: 'Admin', channels: ['whatsapp','sms','email'], hasDays: true },
+  ];
+
+  const emptyTpl = { whatsappTemplateName: '', smsTemplateId: '', smsTemplateText: '', emailSubject: '', emailBody: '' };
+
   const [formData, setFormData] = useState({
-    enableWhatsApp: false,
-    enableSMS: false,
-    enableEmail: false,
-    whatsAppConfig: {
-      apiKey: '',
-      phoneNumberId: '',
-      businessAccountId: ''
-    },
-    smsConfig: {
-      provider: 'twilio',
-      apiKey: '',
-      senderId: ''
-    },
-    emailConfig: {
-      host: '',
-      port: 587,
-      username: '',
-      password: '',
-      fromEmail: '',
-      fromName: ''
-    },
+    enableWhatsApp: false, enableSMS: false, enableEmail: false,
+    whatsAppConfig: { apiKey: '', phoneNumberId: '', businessAccountId: '' },
+    smsConfig: { provider: 'msg91', apiKey: '', senderId: '', dltTemplateIds: { donationCash: '', donationUpi: '', donationInkind: '', inventoryUsed: '', expiryAlert: '', eventReminder: '' } },
+    emailConfig: { host: '', port: 587, username: '', password: '', fromEmail: '', fromName: '' },
     templates: {
-      donationThankYou: {
-        whatsapp: '',
-        sms: '',
-        email: ''
-      },
-      inventoryUsage: {
-        whatsapp: '',
-        sms: ''
-      },
-      eventReminder: {
-        whatsapp: '',
-        sms: ''
-      }
-    }
+      donationCash: { ...emptyTpl },
+      donationUpi: { ...emptyTpl },
+      donationInkind: { ...emptyTpl },
+      inventoryUsed: { ...emptyTpl },
+      expiryAlert: { smsTemplateId: '', smsTemplateText: '', emailSubject: '', emailBody: '' },
+      eventReminder: { ...emptyTpl },
+    },
+    notificationPreferences: {
+      donation:      { enabled: true,  channels: { whatsapp: true,  sms: false, email: false } },
+      inventoryUsed: { enabled: true,  channels: { whatsapp: true,  sms: false, email: false } },
+      expiryAlert:   { enabled: false, daysBefore: 7,  channels: { sms: false, email: true } },
+      eventReminder: { enabled: false, daysBefore: 3,  channels: { whatsapp: false, sms: false, email: true } },
+    },
+    adminContact: { phone: '', email: '' },
   });
 
-  const [testData, setTestData] = useState({
-    type: 'whatsapp',
-    recipient: ''
-  });
+  const [activeTplKey, setActiveTplKey] = useState('donationCash');
+  const [testData, setTestData] = useState({ channel: 'whatsapp', recipient: '' });
 
   useEffect(() => {
     if (settings?.notifications) {
+      const n = settings.notifications;
+      const mt = (src, def) => ({ ...def, ...src });
       setFormData({
-        enableWhatsApp: settings.notifications.enableWhatsApp || false,
-        enableSMS: settings.notifications.enableSMS || false,
-        enableEmail: settings.notifications.enableEmail || false,
-        whatsAppConfig: {
-          apiKey: settings.notifications.whatsAppConfig?.apiKey || '',
-          phoneNumberId: settings.notifications.whatsAppConfig?.phoneNumberId || '',
-          businessAccountId: settings.notifications.whatsAppConfig?.businessAccountId || ''
-        },
+        enableWhatsApp: n.enableWhatsApp ?? false,
+        enableSMS: n.enableSMS ?? false,
+        enableEmail: n.enableEmail ?? false,
+        whatsAppConfig: { apiKey: n.whatsAppConfig?.apiKey || '', phoneNumberId: n.whatsAppConfig?.phoneNumberId || '', businessAccountId: n.whatsAppConfig?.businessAccountId || '' },
         smsConfig: {
-          provider: settings.notifications.smsConfig?.provider || 'twilio',
-          apiKey: settings.notifications.smsConfig?.apiKey || '',
-          senderId: settings.notifications.smsConfig?.senderId || ''
-        },
-        emailConfig: {
-          host: settings.notifications.emailConfig?.host || '',
-          port: settings.notifications.emailConfig?.port || 587,
-          username: settings.notifications.emailConfig?.username || '',
-          password: settings.notifications.emailConfig?.password || '',
-          fromEmail: settings.notifications.emailConfig?.fromEmail || '',
-          fromName: settings.notifications.emailConfig?.fromName || ''
-        },
-        templates: {
-          donationThankYou: {
-            whatsapp: settings.notifications.templates?.donationThankYou?.whatsapp || 'Thank you {donorName} for your ₹{amount} donation to {templeName} for {event}. Your contribution supports our temple activities.',
-            sms: settings.notifications.templates?.donationThankYou?.sms || 'Thank you {donorName} for your ₹{amount} donation to {templeName}. Receipt: {receiptId}',
-            email: settings.notifications.templates?.donationThankYou?.email || 'Dear {donorName}, Thank you for your generous donation of ₹{amount}.'
-          },
-          inventoryUsage: {
-            whatsapp: settings.notifications.templates?.inventoryUsage?.whatsapp || 'Dear {donorName}, your donated {itemType} of {quantity} was used today for {purpose} in {templeName}. Thank you!',
-            sms: settings.notifications.templates?.inventoryUsage?.sms || 'Your donated {itemType} was used for {purpose} at {templeName}. Thank you for your support!'
-          },
-          eventReminder: {
-            whatsapp: settings.notifications.templates?.eventReminder?.whatsapp || 'Reminder: {eventName} is on {eventDate} at {templeName}. Your participation is valuable.',
-            sms: settings.notifications.templates?.eventReminder?.sms || 'Reminder: {eventName} on {eventDate} at {templeName}.'
+          provider: 'msg91',
+          apiKey: n.smsConfig?.apiKey || '',
+          senderId: n.smsConfig?.senderId || '',
+          dltTemplateIds: {
+            donationCash: n.smsConfig?.dltTemplateIds?.donationCash || '',
+            donationUpi: n.smsConfig?.dltTemplateIds?.donationUpi || '',
+            donationInkind: n.smsConfig?.dltTemplateIds?.donationInkind || '',
+            inventoryUsed: n.smsConfig?.dltTemplateIds?.inventoryUsed || '',
+            expiryAlert: n.smsConfig?.dltTemplateIds?.expiryAlert || '',
+            eventReminder: n.smsConfig?.dltTemplateIds?.eventReminder || '',
           }
-        }
+        },
+        emailConfig: { host: n.emailConfig?.host || '', port: n.emailConfig?.port || 587, username: n.emailConfig?.username || '', password: n.emailConfig?.password || '', fromEmail: n.emailConfig?.fromEmail || '', fromName: n.emailConfig?.fromName || '' },
+        templates: {
+          donationCash:   mt(n.templates?.donationCash,   emptyTpl),
+          donationUpi:    mt(n.templates?.donationUpi,    emptyTpl),
+          donationInkind: mt(n.templates?.donationInkind, emptyTpl),
+          inventoryUsed:  mt(n.templates?.inventoryUsed,  emptyTpl),
+          expiryAlert:    mt(n.templates?.expiryAlert,    { smsTemplateId: '', smsTemplateText: '', emailSubject: '', emailBody: '' }),
+          eventReminder:  mt(n.templates?.eventReminder,  emptyTpl),
+        },
+        notificationPreferences: {
+          donation:      { enabled: n.notificationPreferences?.donation?.enabled ?? true,  channels: { whatsapp: n.notificationPreferences?.donation?.channels?.whatsapp ?? true,  sms: n.notificationPreferences?.donation?.channels?.sms ?? false, email: n.notificationPreferences?.donation?.channels?.email ?? false } },
+          inventoryUsed: { enabled: n.notificationPreferences?.inventoryUsed?.enabled ?? true,  channels: { whatsapp: n.notificationPreferences?.inventoryUsed?.channels?.whatsapp ?? true,  sms: n.notificationPreferences?.inventoryUsed?.channels?.sms ?? false, email: n.notificationPreferences?.inventoryUsed?.channels?.email ?? false } },
+          expiryAlert:   { enabled: n.notificationPreferences?.expiryAlert?.enabled ?? false, daysBefore: n.notificationPreferences?.expiryAlert?.daysBefore ?? 7,  channels: { sms: n.notificationPreferences?.expiryAlert?.channels?.sms ?? false, email: n.notificationPreferences?.expiryAlert?.channels?.email ?? true } },
+          eventReminder: { enabled: n.notificationPreferences?.eventReminder?.enabled ?? false, daysBefore: n.notificationPreferences?.eventReminder?.daysBefore ?? 3, channels: { whatsapp: n.notificationPreferences?.eventReminder?.channels?.whatsapp ?? false, sms: n.notificationPreferences?.eventReminder?.channels?.sms ?? false, email: n.notificationPreferences?.eventReminder?.channels?.email ?? true } },
+        },
+        adminContact: { phone: n.adminContact?.phone || '', email: n.adminContact?.email || '' },
       });
     }
   }, [settings]);
 
-  const handleInputChange = (field, value) => {
-    if (field.includes('.')) {
-      const parts = field.split('.');
-      setFormData(prev => {
-        const newData = { ...prev };
-        let current = newData;
-        for (let i = 0; i < parts.length - 1; i++) {
-          current[parts[i]] = { ...current[parts[i]] };
-          current = current[parts[i]];
-        }
-        current[parts[parts.length - 1]] = value;
-        return newData;
-      });
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    }
+  const set = (field, value) => {
+    const parts = field.split('.');
+    setFormData(prev => {
+      const next = { ...prev };
+      let cur = next;
+      for (let i = 0; i < parts.length - 1; i++) {
+        cur[parts[i]] = { ...cur[parts[i]] };
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = value;
+      return next;
+    });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    await updateSettings('notifications', formData);
-  };
+  const Toggle = ({ checked, onChange }) => (
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="sr-only peer" />
+      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-temple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-temple-600"></div>
+    </label>
+  );
 
-  const handleTest = async (e) => {
-    e.preventDefault();
-    if (testData.recipient) {
-      await testNotification(testData.type, testData.recipient);
-    }
-  };
+  const iCls = "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500 text-sm";
+  const lCls = "block text-sm font-medium text-gray-700";
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-medium text-gray-900">Notification Settings</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Configure WhatsApp, SMS, and Email notifications for donors and events
-        </p>
+    <div className="space-y-6">
+
+      {/* Channel Configuration */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Channel Configuration</h3>
+          <p className="mt-1 text-sm text-gray-500">Enable channels and enter credentials</p>
+        </div>
+        <div className="px-6 py-4 space-y-5">
+
+          {/* WhatsApp */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">WhatsApp Business — Meta Cloud API</h4>
+                <p className="text-xs text-gray-500">graph.facebook.com/v20.0</p>
+              </div>
+              <Toggle checked={formData.enableWhatsApp} onChange={v => set('enableWhatsApp', v)} />
+            </div>
+            {formData.enableWhatsApp && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={lCls}>Access Token (Bearer)</label>
+                  <input type="password" className={iCls} value={formData.whatsAppConfig.apiKey} onChange={e => set('whatsAppConfig.apiKey', e.target.value)} placeholder="EAAxxxxx..." />
+                </div>
+                <div>
+                  <label className={lCls}>Phone Number ID</label>
+                  <input type="text" className={iCls} value={formData.whatsAppConfig.phoneNumberId} onChange={e => set('whatsAppConfig.phoneNumberId', e.target.value)} placeholder="Numeric Phone Number ID" />
+                </div>
+                <div>
+                  <label className={lCls}>Business Account ID</label>
+                  <input type="text" className={iCls} value={formData.whatsAppConfig.businessAccountId} onChange={e => set('whatsAppConfig.businessAccountId', e.target.value)} placeholder="WhatsApp Business Account ID" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SMS - MSG91 */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">SMS — MSG91</h4>
+                <p className="text-xs text-gray-500">DLT-registered flow via control.msg91.com</p>
+              </div>
+              <Toggle checked={formData.enableSMS} onChange={v => set('enableSMS', v)} />
+            </div>
+            {formData.enableSMS && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={lCls}>Auth Key (API Key)</label>
+                  <input type="password" className={iCls} value={formData.smsConfig.apiKey} onChange={e => set('smsConfig.apiKey', e.target.value)} placeholder="MSG91 Auth Key" />
+                </div>
+                <div>
+                  <label className={lCls}>Sender ID (6 chars)</label>
+                  <input type="text" className={iCls} value={formData.smsConfig.senderId} onChange={e => set('smsConfig.senderId', e.target.value)} placeholder="TEMPLE" maxLength="6" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Email - SMTP */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Email — SMTP (Nodemailer)</h4>
+                <p className="text-xs text-gray-500">Works with Gmail, Outlook, custom SMTP</p>
+              </div>
+              <Toggle checked={formData.enableEmail} onChange={v => set('enableEmail', v)} />
+            </div>
+            {formData.enableEmail && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={lCls}>SMTP Host</label>
+                  <input type="text" className={iCls} value={formData.emailConfig.host} onChange={e => set('emailConfig.host', e.target.value)} placeholder="smtp.gmail.com" />
+                </div>
+                <div>
+                  <label className={lCls}>SMTP Port</label>
+                  <input type="number" className={iCls} value={formData.emailConfig.port} onChange={e => set('emailConfig.port', parseInt(e.target.value))} placeholder="587" />
+                </div>
+                <div>
+                  <label className={lCls}>Username</label>
+                  <input type="text" className={iCls} value={formData.emailConfig.username} onChange={e => set('emailConfig.username', e.target.value)} placeholder="you@gmail.com" />
+                </div>
+                <div>
+                  <label className={lCls}>Password / App Password</label>
+                  <input type="password" className={iCls} value={formData.emailConfig.password} onChange={e => set('emailConfig.password', e.target.value)} />
+                </div>
+                <div>
+                  <label className={lCls}>From Email</label>
+                  <input type="email" className={iCls} value={formData.emailConfig.fromEmail} onChange={e => set('emailConfig.fromEmail', e.target.value)} placeholder="noreply@temple.com" />
+                </div>
+                <div>
+                  <label className={lCls}>From Name</label>
+                  <input type="text" className={iCls} value={formData.emailConfig.fromName} onChange={e => set('emailConfig.fromName', e.target.value)} placeholder="Temple Tracker" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Admin Contact */}
+          <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Admin Contact <span className="font-normal text-gray-400">(for cron-based alerts: expiry, event reminders)</span></h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={lCls}>Admin Phone</label>
+                <input type="tel" className={iCls} value={formData.adminContact.phone} onChange={e => set('adminContact.phone', e.target.value)} placeholder="9876543210" />
+              </div>
+              <div>
+                <label className={lCls}>Admin Email</label>
+                <input type="email" className={iCls} value={formData.adminContact.email} onChange={e => set('adminContact.email', e.target.value)} placeholder="admin@temple.com" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
-        {/* WhatsApp Configuration */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="text-md font-medium text-gray-900">WhatsApp Notifications</h4>
-              <p className="text-sm text-gray-500">Configure WhatsApp Business API for notifications</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.enableWhatsApp}
-                onChange={(e) => handleInputChange('enableWhatsApp', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-temple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-temple-600"></div>
-            </label>
-          </div>
-          
-          {formData.enableWhatsApp && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">API Key</label>
-                <input
-                  type="password"
-                  value={formData.whatsAppConfig.apiKey}
-                  onChange={(e) => handleInputChange('whatsAppConfig.apiKey', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="Enter WhatsApp API key"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Phone Number ID</label>
-                <input
-                  type="text"
-                  value={formData.whatsAppConfig.phoneNumberId}
-                  onChange={(e) => handleInputChange('whatsAppConfig.phoneNumberId', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="Phone number ID"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Business Account ID</label>
-                <input
-                  type="text"
-                  value={formData.whatsAppConfig.businessAccountId}
-                  onChange={(e) => handleInputChange('whatsAppConfig.businessAccountId', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="Business account ID"
-                />
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* SMS Configuration */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="text-md font-medium text-gray-900">SMS Notifications</h4>
-              <p className="text-sm text-gray-500">Configure SMS gateway for text notifications</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.enableSMS}
-                onChange={(e) => handleInputChange('enableSMS', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-temple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-temple-600"></div>
-            </label>
-          </div>
-          
-          {formData.enableSMS && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">SMS Provider</label>
-                <select
-                  value={formData.smsConfig.provider}
-                  onChange={(e) => handleInputChange('smsConfig.provider', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                >
-                  <option value="twilio">Twilio</option>
-                  <option value="msg91">MSG91</option>
-                  <option value="textlocal">TextLocal</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">API Key</label>
-                <input
-                  type="password"
-                  value={formData.smsConfig.apiKey}
-                  onChange={(e) => handleInputChange('smsConfig.apiKey', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="Enter SMS API key"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Sender ID</label>
-                <input
-                  type="text"
-                  value={formData.smsConfig.senderId}
-                  onChange={(e) => handleInputChange('smsConfig.senderId', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="6 character sender ID"
-                  maxLength="6"
-                />
-              </div>
-            </div>
-          )}
+      {/* Notification Preferences */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Notification Preferences</h3>
+          <p className="mt-1 text-sm text-gray-500">Choose which events trigger notifications and via which channels</p>
         </div>
-
-        {/* Email Configuration */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="text-md font-medium text-gray-900">Email Notifications</h4>
-              <p className="text-sm text-gray-500">Configure SMTP settings for email notifications</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.enableEmail}
-                onChange={(e) => handleInputChange('enableEmail', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-temple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-temple-600"></div>
-            </label>
-          </div>
-          
-          {formData.enableEmail && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">SMTP Host</label>
-                <input
-                  type="text"
-                  value={formData.emailConfig.host}
-                  onChange={(e) => handleInputChange('emailConfig.host', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="smtp.gmail.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">SMTP Port</label>
-                <input
-                  type="number"
-                  value={formData.emailConfig.port}
-                  onChange={(e) => handleInputChange('emailConfig.port', parseInt(e.target.value))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="587"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Username</label>
-                <input
-                  type="text"
-                  value={formData.emailConfig.username}
-                  onChange={(e) => handleInputChange('emailConfig.username', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="your-email@gmail.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
-                <input
-                  type="password"
-                  value={formData.emailConfig.password}
-                  onChange={(e) => handleInputChange('emailConfig.password', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="App password"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">From Email</label>
-                <input
-                  type="email"
-                  value={formData.emailConfig.fromEmail}
-                  onChange={(e) => handleInputChange('emailConfig.fromEmail', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="noreply@temple.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">From Name</label>
-                <input
-                  type="text"
-                  value={formData.emailConfig.fromName}
-                  onChange={(e) => handleInputChange('emailConfig.fromName', e.target.value)}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                  placeholder="Temple Management System"
-                />
-              </div>
-            </div>
-          )}
+        <div className="px-6 py-4 overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="py-2 pr-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trigger</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Recipient</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Enabled</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">WhatsApp</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">SMS</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Days Before</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {PREF_TRIGGERS.map(({ key, label, recipient, channels, hasDays }) => {
+                const pref = formData.notificationPreferences[key];
+                return (
+                  <tr key={key}>
+                    <td className="py-3 pr-4 text-sm font-medium text-gray-900">{label}</td>
+                    <td className="py-3 px-3 text-center">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${recipient === 'Donor' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{recipient}</span>
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <Toggle checked={pref.enabled} onChange={v => set(`notificationPreferences.${key}.enabled`, v)} />
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {channels.includes('whatsapp') ? (
+                        <input type="checkbox" className="h-4 w-4 text-temple-600 border-gray-300 rounded focus:ring-temple-500" checked={pref.channels.whatsapp ?? false} onChange={e => set(`notificationPreferences.${key}.channels.whatsapp`, e.target.checked)} disabled={!pref.enabled} />
+                      ) : <span className="text-gray-300 text-sm">—</span>}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <input type="checkbox" className="h-4 w-4 text-temple-600 border-gray-300 rounded focus:ring-temple-500" checked={pref.channels.sms ?? false} onChange={e => set(`notificationPreferences.${key}.channels.sms`, e.target.checked)} disabled={!pref.enabled} />
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <input type="checkbox" className="h-4 w-4 text-temple-600 border-gray-300 rounded focus:ring-temple-500" checked={pref.channels.email ?? false} onChange={e => set(`notificationPreferences.${key}.channels.email`, e.target.checked)} disabled={!pref.enabled} />
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {hasDays ? (
+                        <input type="number" className="block w-16 mx-auto border border-gray-300 rounded-md py-1 px-2 text-sm text-center focus:outline-none focus:ring-temple-500 focus:border-temple-500" value={pref.daysBefore ?? 7} onChange={e => set(`notificationPreferences.${key}.daysBefore`, parseInt(e.target.value))} min="1" max="30" disabled={!pref.enabled} />
+                      ) : <span className="text-gray-300 text-sm">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        {/* Message Templates */}
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h4 className="text-md font-medium text-gray-900 mb-4">Message Templates</h4>
-          <p className="text-sm text-gray-500 mb-4">
-            Customize notification templates. Use variables like {'{donorName}'}, {'{amount}'}, {'{templeName}'}, {'{receiptId}'}, etc.
-          </p>
-          
-          <div className="space-y-6">
-            {/* Donation Thank You Templates */}
-            <div>
-              <h5 className="text-sm font-medium text-gray-900 mb-3">Donation Thank You</h5>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">WhatsApp Template</label>
-                  <textarea
-                    value={formData.templates.donationThankYou.whatsapp}
-                    onChange={(e) => handleInputChange('templates.donationThankYou.whatsapp', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                    rows="2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">SMS Template</label>
-                  <textarea
-                    value={formData.templates.donationThankYou.sms}
-                    onChange={(e) => handleInputChange('templates.donationThankYou.sms', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                    rows="2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email Template</label>
-                  <textarea
-                    value={formData.templates.donationThankYou.email}
-                    onChange={(e) => handleInputChange('templates.donationThankYou.email', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                    rows="3"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Message Templates */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Message Templates</h3>
+          <p className="mt-1 text-sm text-gray-500">Configure per-trigger templates. Use <code className="bg-gray-100 px-1 rounded text-xs">{'{varName}'}</code> placeholders.</p>
         </div>
-
-        {/* Test Notification Section */}
-        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <h4 className="text-md font-medium text-gray-900 mb-4">Test Notifications</h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Notification Type</label>
-              <select
-                value={testData.type}
-                onChange={(e) => setTestData(prev => ({ ...prev, type: e.target.value }))}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
+        <div className="px-6 py-4">
+          <div className="flex flex-wrap gap-2 mb-6 pb-4 border-b border-gray-100">
+            {TEMPLATE_KEYS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTplKey(key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeTplKey === key ? 'bg-temple-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               >
+                {label}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            const tplMeta = TEMPLATE_KEYS.find(t => t.key === activeTplKey);
+            const tpl = formData.templates[activeTplKey] || {};
+            const hasWA = activeTplKey !== 'expiryAlert';
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-1 items-center">
+                  <span className="text-xs text-gray-500 mr-1">Variables:</span>
+                  {tplMeta.vars.map(v => <code key={v} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">{v}</code>)}
+                </div>
+                {hasWA && (
+                  <div>
+                    <label className={lCls}>WhatsApp Template Name</label>
+                    <input type="text" className={iCls} value={tpl.whatsappTemplateName || ''} onChange={e => set(`templates.${activeTplKey}.whatsappTemplateName`, e.target.value)} placeholder="e.g. donation_thankyou_cash" />
+                    <p className="mt-1 text-xs text-gray-400">Exact name as approved in Meta Business Manager</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={lCls}>SMS DLT Template ID</label>
+                    <input type="text" className={iCls} value={tpl.smsTemplateId || ''} onChange={e => set(`templates.${activeTplKey}.smsTemplateId`, e.target.value)} placeholder="MSG91 DLT template ID" />
+                  </div>
+                  <div>
+                    <label className={lCls}>SMS Template Text</label>
+                    <textarea className={iCls} rows="2" value={tpl.smsTemplateText || ''} onChange={e => set(`templates.${activeTplKey}.smsTemplateText`, e.target.value)} placeholder="Dear {donorName}, ..." />
+                  </div>
+                </div>
+                <div>
+                  <label className={lCls}>Email Subject</label>
+                  <input type="text" className={iCls} value={tpl.emailSubject || ''} onChange={e => set(`templates.${activeTplKey}.emailSubject`, e.target.value)} placeholder="e.g. Thank you for your donation - {receiptId}" />
+                </div>
+                <div>
+                  <label className={lCls}>Email Body (HTML)</label>
+                  <textarea className={`${iCls} font-mono`} rows="5" value={tpl.emailBody || ''} onChange={e => set(`templates.${activeTplKey}.emailBody`, e.target.value)} placeholder="<p>Dear {donorName},</p><p>Thank you...</p>" />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Test Notification */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Test Notification</h3>
+          <p className="mt-1 text-sm text-gray-500">Send a test message using the "Donation Cash" template with dummy data</p>
+        </div>
+        <div className="px-6 py-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 items-end">
+            <div>
+              <label className={lCls}>Channel</label>
+              <select className={iCls} value={testData.channel} onChange={e => setTestData(p => ({ ...p, channel: e.target.value }))}>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="sms">SMS</option>
                 <option value="email">Email</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {testData.type === 'email' ? 'Email Address' : 'Phone Number'}
-              </label>
+              <label className={lCls}>{testData.channel === 'email' ? 'Email Address' : 'Phone Number'}</label>
               <input
-                type={testData.type === 'email' ? 'email' : 'tel'}
+                type={testData.channel === 'email' ? 'email' : 'tel'}
+                className={iCls}
                 value={testData.recipient}
-                onChange={(e) => setTestData(prev => ({ ...prev, recipient: e.target.value }))}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-temple-500 focus:border-temple-500"
-                placeholder={testData.type === 'email' ? 'test@example.com' : '+91 9876543210'}
+                onChange={e => setTestData(p => ({ ...p, recipient: e.target.value }))}
+                placeholder={testData.channel === 'email' ? 'test@example.com' : '9876543210'}
               />
             </div>
-            <div className="flex items-end">
+            <div>
               <button
                 type="button"
-                onClick={handleTest}
+                onClick={() => { if (testData.recipient) testNotification(testData.channel, testData.recipient); }}
                 disabled={testing || !testData.recipient}
-                className="w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
-                {testing ? 'Testing...' : 'Send Test'}
+                {testing ? 'Sending...' : 'Send Test'}
               </button>
             </div>
           </div>
+          <p className="mt-2 text-xs text-gray-400">Channel must be enabled and configured above. Result is logged in Notification Logs tab.</p>
         </div>
+      </div>
 
-        {/* Save Button */}
-        <div className="pt-4 border-t border-gray-200">
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  Saving...
-                </>
-              ) : (
-                'Save Notification Settings'
-              )}
-            </button>
+      {/* Save */}
+      <div className="flex justify-end pb-2">
+        <button
+          type="button"
+          onClick={() => updateSettings('notifications', formData)}
+          disabled={saving}
+          className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-temple-600 to-saffron-500 hover:from-temple-700 hover:to-saffron-600 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-temple-500"
+        >
+          {saving ? (<><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>Saving...</>) : 'Save Notification Settings'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const NotificationLogsTab = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({ status: '', channel: '', trigger: '' });
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({ page, limit: 20 });
+      if (filters.status) params.set('status', filters.status);
+      if (filters.channel) params.set('channel', filters.channel);
+      if (filters.trigger) params.set('trigger', filters.trigger);
+      const { data } = await authService.api.get(`/settings/notification-logs?${params}`);
+      if (data.success) {
+        setLogs(data.data);
+        setPagination(data.pagination);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notification logs:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filters]);
+
+  useEffect(() => {
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 30000);
+    return () => clearInterval(interval);
+  }, [fetchLogs]);
+
+  const CHANNEL_COLORS = { whatsapp: 'bg-green-100 text-green-700', sms: 'bg-blue-100 text-blue-700', email: 'bg-purple-100 text-purple-700' };
+  const STATUS_COLORS  = { sent: 'bg-green-100 text-green-700', failed: 'bg-red-100 text-red-700' };
+  const TRIGGER_LABELS = { donation: 'Donation', inventoryUsed: 'Inv. Used', expiryAlert: 'Expiry Alert', eventReminder: 'Event Reminder', test: 'Test' };
+
+  const setFilter = (key, val) => { setFilters(p => ({ ...p, [key]: val })); setPage(1); };
+
+  return (
+    <div className="bg-white shadow rounded-lg">
+      <div className="px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Notification Logs</h3>
+            <p className="mt-1 text-sm text-gray-500">Audit trail of all notification attempts. Auto-refreshes every 30s.</p>
+          </div>
+          <button onClick={fetchLogs} disabled={loading} className="text-sm text-temple-600 hover:text-temple-700 font-medium disabled:opacity-50">
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3 items-center">
+          <select value={filters.status} onChange={e => setFilter('status', e.target.value)} className="text-sm border border-gray-300 rounded-md px-2 py-1 min-w-[110px] focus:outline-none focus:ring-temple-500 focus:border-temple-500">
+            <option value="">All Status</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+          </select>
+          <select value={filters.channel} onChange={e => setFilter('channel', e.target.value)} className="text-sm border border-gray-300 rounded-md px-2 py-1 min-w-[130px] focus:outline-none focus:ring-temple-500 focus:border-temple-500">
+            <option value="">All Channels</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="sms">SMS</option>
+            <option value="email">Email</option>
+          </select>
+          <select value={filters.trigger} onChange={e => setFilter('trigger', e.target.value)} className="text-sm border border-gray-300 rounded-md px-2 py-1 min-w-[140px] focus:outline-none focus:ring-temple-500 focus:border-temple-500">
+            <option value="">All Triggers</option>
+            <option value="donation">Donation</option>
+            <option value="inventoryUsed">Inventory Used</option>
+            <option value="expiryAlert">Expiry Alert</option>
+            <option value="eventReminder">Event Reminder</option>
+            <option value="test">Test</option>
+          </select>
+          <span className="text-xs text-gray-400">{pagination.total} total records</span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        {loading && logs.length === 0 ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-temple-600"></div>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-12">
+            <ClipboardDocumentListIcon className="mx-auto h-10 w-10 text-gray-300" />
+            <p className="mt-2 text-sm text-gray-500">No notification logs found.</p>
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date / Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trigger</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipient</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {logs.map(log => (
+                <tr key={log._id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                    {new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{TRIGGER_LABELS[log.trigger] || log.trigger}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${CHANNEL_COLORS[log.channel] || 'bg-gray-100 text-gray-700'}`}>{log.channel}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {log.recipientName && <div className="font-medium text-gray-900">{log.recipientName}</div>}
+                    <div className="text-xs text-gray-500">{log.recipient}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[log.status] || 'bg-gray-100 text-gray-700'}`}>{log.status}</span>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-red-600 max-w-xs truncate" title={log.error || ''}>{log.error || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {pagination.pages > 1 && (
+        <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+          <span className="text-sm text-gray-500">Page {pagination.current} of {pagination.pages}</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPage(p => p - 1)} disabled={page <= 1} className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50">Previous</button>
+            <button onClick={() => setPage(p => p + 1)} disabled={page >= pagination.pages} className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50">Next</button>
           </div>
         </div>
-      </form>
+      )}
     </div>
   );
 };
@@ -1363,18 +1535,8 @@ const BackupTab = ({ settings, updateSettings, saving }) => {
   const fetchBackupInfo = async () => {
     try {
       setLoadingBackup(true);
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/settings/backup-info', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        setBackupInfo(data.data);
-      }
+      const { data } = await authService.api.get('/settings/backup-info');
+      if (data.success) setBackupInfo(data.data);
     } catch (error) {
       console.error('Failed to fetch backup info:', error);
     } finally {
@@ -1385,20 +1547,8 @@ const BackupTab = ({ settings, updateSettings, saving }) => {
   const createBackup = async () => {
     try {
       setCreatingBackup(true);
-      const token = localStorage.getItem('temple_token');
-      const response = await fetch('/api/settings/backup', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        fetchBackupInfo(); // Refresh backup info
-        // Show success notification would be handled by parent component
-      }
+      const { data } = await authService.api.post('/settings/backup');
+      if (data.success) fetchBackupInfo();
     } catch (error) {
       console.error('Failed to create backup:', error);
     } finally {

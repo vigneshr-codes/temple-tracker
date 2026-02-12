@@ -1,7 +1,8 @@
 const { validationResult } = require('express-validator');
 const Inventory = require('../models/Inventory');
+const Settings = require('../models/Settings');
 const { generateBarcodeData, createBarcodeLabel, decodeBarcodeData } = require('../utils/barcode');
-const { sendNotification: sendNotificationUtil, templates } = require('../utils/notification');
+const { sendNotification } = require('../utils/notification');
 
 // Helper function to normalize purpose values
 const normalizePurpose = (purpose) => {
@@ -71,6 +72,24 @@ const getInventory = async (req, res, next) => {
       }
     ]);
 
+    const now = new Date();
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(now.getDate() + 7);
+
+    // Count items whose expiry date has passed (regardless of status field)
+    const expiredCount = await Inventory.countDocuments({
+      ...filter,
+      expiryDate: { $exists: true, $lt: now },
+      status: { $nin: ['used', 'damaged'] }
+    });
+
+    // Count items expiring within next 7 days
+    const expiringSoonCount = await Inventory.countDocuments({
+      ...filter,
+      status: 'available',
+      expiryDate: { $exists: true, $gte: now, $lte: sevenDaysFromNow }
+    });
+
     res.status(200).json({
       success: true,
       data: inventory,
@@ -79,7 +98,9 @@ const getInventory = async (req, res, next) => {
         pages: Math.ceil(totalCount / limit),
         total: totalCount
       },
-      stats
+      stats,
+      expiredCount,
+      expiringSoonCount
     });
   } catch (error) {
     next(error);
@@ -126,9 +147,13 @@ const updateInventoryItem = async (req, res, next) => {
       });
     }
 
+    const { itemType, quantity, unit, storageLocation, expiryDate, notes, status } = req.body;
+    const allowedUpdate = { itemType, quantity, unit, storageLocation, expiryDate, notes, status };
+    Object.keys(allowedUpdate).forEach(k => allowedUpdate[k] === undefined && delete allowedUpdate[k]);
+
     const updatedItem = await Inventory.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     );
 
@@ -193,22 +218,16 @@ const useInventoryItem = async (req, res, next) => {
     // Save will trigger pre-save hook to update remaining quantity and status
     await item.save();
 
-    // Send notification to donor about item usage
-    try {
-      if (item.donor && item.donor.mobile) {
-        const notificationTemplate = templates.itemUsageNotification(
-          item.donor.name,
-          item.itemType,
-          `${quantityUsed} ${item.unit}`,
-          purpose,
-          process.env.TEMPLE_NAME
-        );
-
-        await sendNotificationUtil('whatsapp', item.donor.mobile, notificationTemplate.subject, notificationTemplate.message);
-      }
-    } catch (notificationError) {
-      console.error('Failed to send usage notification:', notificationError);
-    }
+    // Send notification to donor about item usage (fire and forget)
+    sendNotification('inventoryUsed', {
+      donor: item.donor,
+      itemType: item.itemType,
+      quantity: quantityUsed,
+      unit: item.unit,
+      purpose,
+      referenceId: item._id,
+      referenceType: 'Inventory'
+    }, req.user).catch(() => {});
 
     const updatedItem = await Inventory.findById(item._id)
       .populate('donationId', 'donationId donor event')
@@ -238,8 +257,11 @@ const generateBarcode = async (req, res, next) => {
       });
     }
 
+    const settings = await Settings.findOne().select('templeConfig.name');
+    const templeName = settings?.templeConfig?.name;
+
     const barcodeData = generateBarcodeData(item);
-    const barcodeLabel = await createBarcodeLabel(item);
+    const barcodeLabel = await createBarcodeLabel(item, templeName);
 
     // Update item with barcode data
     item.barcode = {

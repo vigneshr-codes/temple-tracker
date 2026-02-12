@@ -140,9 +140,15 @@ const updateEvent = async (req, res, next) => {
       });
     }
 
+    const { name, description, startDate, endDate, location, organizer,
+            category, status, budget, notes, expectedAttendees } = req.body;
+    const allowedUpdate = { name, description, startDate, endDate, location, organizer,
+                            category, status, budget, notes, expectedAttendees };
+    Object.keys(allowedUpdate).forEach(k => allowedUpdate[k] === undefined && delete allowedUpdate[k]);
+
     const updatedEvent = await Event.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      allowedUpdate,
       { new: true, runValidators: true }
     )
     .populate('organizer', 'name username')

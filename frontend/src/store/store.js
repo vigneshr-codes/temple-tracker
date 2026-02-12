@@ -6,6 +6,7 @@ import expenseSlice from '../features/expenses/expenseSlice';
 import eventSlice from '../features/events/eventSlice';
 import reportSlice from '../features/reports/reportSlice';
 import uiSlice from '../features/ui/uiSlice';
+import settingsSlice from '../features/settings/settingsSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     events: eventSlice,
     reports: reportSlice,
     ui: uiSlice,
+    settings: settingsSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

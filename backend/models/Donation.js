@@ -64,7 +64,6 @@ const donationSchema = new mongoose.Schema({
   items: [{
     itemType: {
       type: String,
-      enum: ['rice', 'oil', 'ghee', 'vegetables', 'lentils', 'sugar', 'salt', 'dal', 'wheat', 'flour', 'coconut', 'other'],
       required: function() {
         return this.type === 'in-kind';
       },
@@ -78,12 +77,27 @@ const donationSchema = new mongoose.Schema({
     },
     unit: {
       type: String,
-      enum: ['kg', 'liters', 'units', 'grams'],
+      enum: ['kg', 'liters', 'units', 'grams', 'pieces', 'packets', 'bags'],
       required: function() {
         return this.type === 'in-kind';
       },
     },
     expiryDate: Date,
+    expiryDateSource: {
+      type: String,
+      enum: ['manual', 'calculated-from-mfg', 'calculated-from-donation'],
+      default: 'manual',
+    },
+    manufactureDate: Date,
+    shelfLifeValue: {
+      type: Number,
+      min: [1, 'Shelf life must be at least 1'],
+    },
+    shelfLifeUnit: {
+      type: String,
+      enum: ['days', 'months', 'years'],
+      default: 'months',
+    },
     storageInstructions: String,
     description: String,
   }],
