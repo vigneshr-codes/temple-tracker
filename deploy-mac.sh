@@ -55,13 +55,26 @@ fi
 
 echo -e "${GREEN}✅ Docker Compose is available${NC}"
 
-# Generate secure passwords and keys
+# Generate or reuse secure passwords and keys
 echo -e "${YELLOW}🔐 Generating secure passwords and keys...${NC}"
-MONGO_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
-JWT_SECRET=$(openssl rand -base64 32 | tr -d /=+)
-SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32)
 
-echo -e "${GREEN}✅ Passwords and keys generated${NC}"
+# If a previous deployment exists, reuse its passwords to avoid MongoDB auth failure
+if [ -f docker-compose.yml ] && docker volume ls -q | grep -q "mongodb_data"; then
+    echo -e "${YELLOW}ℹ️  Existing deployment detected — reusing stored credentials${NC}"
+    MONGO_PASSWORD=$(grep "MONGODB_URI:" docker-compose.yml | sed 's/.*admin:\(.*\)@mongodb.*/\1/')
+    JWT_SECRET=$(grep "JWT_SECRET:" docker-compose.yml | awk '{print $2}')
+    SETTINGS_ENCRYPTION_KEY=$(grep "SETTINGS_ENCRYPTION_KEY:" docker-compose.yml | awk '{print $2}')
+    # Fall back to generating new ones if extraction failed
+    [ -z "$MONGO_PASSWORD" ] && MONGO_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
+    [ -z "$JWT_SECRET" ] && JWT_SECRET=$(openssl rand -base64 32 | tr -d /=+)
+    [ -z "$SETTINGS_ENCRYPTION_KEY" ] && SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32)
+else
+    MONGO_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
+    JWT_SECRET=$(openssl rand -base64 32 | tr -d /=+)
+    SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32)
+fi
+
+echo -e "${GREEN}✅ Passwords and keys ready${NC}"
 
 # Create docker-compose.yml
 echo -e "${YELLOW}📄 Creating deployment configuration...${NC}"
