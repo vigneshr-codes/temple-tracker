@@ -794,7 +794,9 @@ const Expenses = () => {
 
     const regPanLine = [
       tc.registrationNumber ? `Regn No.: ${tc.registrationNumber}` : '',
-      tc.panNumber ? `PAN: ${tc.panNumber}` : ''
+      tc.panNumber ? `PAN: ${tc.panNumber}` : '',
+      tc.exemption80GNumber ? `80G: ${tc.exemption80GNumber}` : '',
+      tc.exemption12ANumber ? `12A: ${tc.exemption12ANumber}` : ''
     ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
 
     const linkedRowsHTML = (challanData.linkedItems || []).map((item, i) => `
@@ -815,6 +817,7 @@ const Expenses = () => {
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:Arial,sans-serif;padding:20px;color:#111;font-size:12px;}
+    ${logoDataUrl ? `body::before{content:'';position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoDataUrl}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.07;pointer-events:none;z-index:0;}` : ''}
     .no-print{text-align:center;margin-bottom:14px;}
     .btn{padding:8px 22px;font-size:13px;border:none;border-radius:5px;cursor:pointer;margin-right:8px;}
     .btn-print{background:#b45309;color:#fff;}
@@ -826,12 +829,13 @@ const Expenses = () => {
     .ch-stripe{height:5px;background:linear-gradient(90deg,#d97706,#f59e0b,#fbbf24,#f59e0b,#d97706);}
 
     /* Header */
-    .ch-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 14px;border-bottom:1px solid #e5e7eb;gap:16px;}
-    .ch-text{flex:1;}
-    .ch-name{font-size:15px;font-weight:800;color:#111827;line-height:1.4;margin-bottom:4px;}
+    .ch-header{display:flex;align-items:center;padding:16px 20px 14px;border-bottom:1px solid #e5e7eb;gap:0;}
+    .ch-spacer{flex-shrink:0;width:88px;}
+    .ch-text{flex:1;text-align:center;}
+    .ch-name{font-size:18px;font-weight:800;color:#111827;line-height:1.4;margin-bottom:5px;}
     .ch-name span{display:block;white-space:nowrap;}
-    .ch-sub{font-size:10px;color:#6b7280;margin:2px 0;}
-    .ch-ids{font-size:9px;color:#9ca3af;margin-top:4px;}
+    .ch-sub{font-size:14px;color:#6b7280;margin:3px 0;}
+    .ch-ids{font-size:13px;color:#9ca3af;margin-top:4px;}
     .ch-logo-box{flex-shrink:0;width:88px;height:88px;border-radius:50%;overflow:hidden;border:2px solid #fde68a;box-shadow:0 0 0 4px #fffbeb;background:#fffbeb;display:flex;align-items:center;justify-content:center;}
     .ch-logo-box img{width:88px;height:88px;object-fit:contain;}
 
@@ -880,9 +884,12 @@ const Expenses = () => {
       .challan{page-break-inside:avoid;}
       .ch-stripe{height:3px;}
       .ch-header{padding:8px 14px 6px;}
+      .ch-spacer{width:64px;}
       .ch-logo-box{width:64px;height:64px;box-shadow:none;}
       .ch-logo-box img{width:64px;height:64px;}
-      .ch-name{font-size:12px;}
+      .ch-name{font-size:14px;}
+      .ch-sub{font-size:13px;}
+      .ch-ids{font-size:12px;}
       .ch-label{padding:5px;}
       .ch-label span{font-size:11px;}
       .ch-meta{padding:4px 14px;}
@@ -902,15 +909,16 @@ const Expenses = () => {
 
   <div class="challan">
     <div class="ch-stripe"></div>
-    <!-- Header: name/address left, logo right -->
+    <!-- Header: spacer | centered name/address | logo right -->
     <div class="ch-header">
+      <div class="ch-spacer"></div>
       <div class="ch-text">
         <div class="ch-name">${(tc.name || 'Temple').split('|').map(p => `<span>${p}</span>`).join('')}</div>
         ${addressLine ? `<div class="ch-sub">${addressLine}${pincode}</div>` : ''}
         ${(phone || email) ? `<div class="ch-sub">${[phone ? 'Ph: '+phone : '', email ? 'Email: '+email : ''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</div>` : ''}
         ${regPanLine ? `<div class="ch-ids">${regPanLine}</div>` : ''}
       </div>
-      ${logoDataUrl ? `<div class="ch-logo-box"><img src="${logoDataUrl}" alt="logo"></div>` : ''}
+      ${logoDataUrl ? `<div class="ch-logo-box"><img src="${logoDataUrl}" alt="logo"></div>` : '<div class="ch-spacer"></div>'}
     </div>
 
     <!-- Voucher label -->
@@ -1708,28 +1716,41 @@ const Expenses = () => {
                 {/* Gold top stripe */}
                 <div style={{ height: '5px', background: 'linear-gradient(90deg, #d97706, #f59e0b, #fbbf24, #f59e0b, #d97706)' }} />
 
-                {/* Temple Header — name/address left, logo right */}
-                <div className="bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h1 className="font-extrabold text-gray-900 leading-snug" style={{ fontSize: '16px' }}>
+                {/* Temple Header — spacer | centered text | logo right */}
+                <div className="bg-white border-b border-gray-200 px-6 py-5 flex items-center gap-0">
+                  <div style={{ flexShrink: 0, width: 88 }} />
+                  <div className="flex-1 text-center min-w-0">
+                    <h1 className="font-extrabold text-gray-900 leading-snug" style={{ fontSize: '18px' }}>
                       {(templeConfig?.name || 'Temple').split('|').map((line, i) => (
                         <span key={i} style={{ display: 'block', whiteSpace: 'nowrap' }}>{line}</span>
                       ))}
                     </h1>
                     {templeConfig?.address?.city && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-sm text-gray-500 mt-1">
                         {[templeConfig.address.street, templeConfig.address.city, templeConfig.address.state].filter(Boolean).join(', ')}
                         {templeConfig.address.pincode ? ` - ${templeConfig.address.pincode}` : ''}
                       </p>
                     )}
-                    {templeConfig?.registrationNumber && (
-                      <p className="text-xs text-gray-400 mt-0.5">Regn: {templeConfig.registrationNumber}</p>
+                    {templeConfig?.contact?.phone && (
+                      <p className="text-sm text-gray-500 mt-0.5">Ph: {templeConfig.contact.phone}</p>
+                    )}
+                    {(templeConfig?.registrationNumber || templeConfig?.panNumber) && (
+                      <p className="text-sm text-gray-400 mt-1">
+                        {[templeConfig.registrationNumber ? `Regn: ${templeConfig.registrationNumber}` : '', templeConfig.panNumber ? `PAN: ${templeConfig.panNumber}` : ''].filter(Boolean).join('   ')}
+                      </p>
+                    )}
+                    {(templeConfig?.exemption80GNumber || templeConfig?.exemption12ANumber) && (
+                      <p className="text-sm text-gray-400 mt-0.5">
+                        {[templeConfig.exemption80GNumber ? `80G: ${templeConfig.exemption80GNumber}` : '', templeConfig.exemption12ANumber ? `12A: ${templeConfig.exemption12ANumber}` : ''].filter(Boolean).join('   ')}
+                      </p>
                     )}
                   </div>
-                  {logoUrl && (
-                    <div className="flex-shrink-0 rounded-full overflow-hidden border-2 border-amber-300 shadow" style={{ width: 88, height: 88, background: '#fffbeb', boxShadow: '0 0 0 4px #fffbeb, 0 0 0 6px #fde68a' }}>
+                  {logoUrl ? (
+                    <div className="flex-shrink-0 rounded-full overflow-hidden" style={{ width: 88, height: 88, background: '#fffbeb', border: '2px solid #fde68a', boxShadow: '0 0 0 4px #fffbeb' }}>
                       <img src={logoUrl} alt="logo" style={{ width: 88, height: 88, objectFit: 'contain' }} />
                     </div>
+                  ) : (
+                    <div style={{ flexShrink: 0, width: 88 }} />
                   )}
                 </div>
 

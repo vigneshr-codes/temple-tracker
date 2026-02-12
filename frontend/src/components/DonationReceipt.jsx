@@ -103,6 +103,20 @@ function buildReceiptHTML({ donation, templeConfig, logoDataUrl }) {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Arial', sans-serif; padding: 24px; background: #f3f4f6; }
+    ${logoDataUrl ? `body::before {
+      content: '';
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 320px; height: 320px;
+      background-image: url('${logoDataUrl}');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      opacity: 0.07;
+      pointer-events: none;
+      z-index: 0;
+    }` : ''}
 
     .no-print { text-align: center; margin-bottom: 18px; }
     .btn-print { padding: 8px 24px; font-size: 14px; background: #b45309; color: #fff; border: none; border-radius: 6px; cursor: pointer; margin-right: 8px; }
@@ -123,17 +137,18 @@ function buildReceiptHTML({ donation, templeConfig, logoDataUrl }) {
 
     /* Header */
     .header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; padding: 20px 24px 16px; border-bottom: 1px solid #e5e7eb;
+      display: flex; align-items: center;
+      padding: 20px 24px 16px; border-bottom: 1px solid #e5e7eb; gap: 0;
     }
-    .header-text { flex: 1; }
+    .header-spacer { flex-shrink: 0; width: 88px; }
+    .header-text { flex: 1; text-align: center; }
     .temple-name {
-      font-size: 16px; font-weight: 800; color: #111827;
-      line-height: 1.4; margin-bottom: 5px; letter-spacing: 0.01em;
+      font-size: 18px; font-weight: 800; color: #111827;
+      line-height: 1.4; margin-bottom: 6px; letter-spacing: 0.01em;
     }
     .name-line { display: block; white-space: nowrap; }
-    .header-sub  { font-size: 10.5px; color: #6b7280; margin: 2px 0; }
-    .header-ids  { font-size: 9.5px; color: #9ca3af; margin-top: 5px; letter-spacing: 0.02em; }
+    .header-sub  { font-size: 14px; color: #6b7280; margin: 3px 0; }
+    .header-ids  { font-size: 13px; color: #9ca3af; margin-top: 5px; letter-spacing: 0.02em; }
     .logo-box {
       flex-shrink: 0; width: 88px; height: 88px;
       border-radius: 50%; overflow: hidden;
@@ -202,9 +217,12 @@ function buildReceiptHTML({ donation, templeConfig, logoDataUrl }) {
       .card { box-shadow: none; border-radius: 0; border: 1px solid #ccc; max-width: 100%; page-break-inside: avoid; }
       .top-stripe { height: 3px; }
       .header { padding: 8px 16px 6px; }
+      .header-spacer { width: 64px; }
       .logo-box { width: 64px; height: 64px; box-shadow: none; }
       .logo-box img { width: 64px; height: 64px; }
-      .temple-name { font-size: 13px; }
+      .temple-name { font-size: 14px; }
+      .header-sub { font-size: 13px; }
+      .header-ids { font-size: 12px; }
       .receipt-banner { padding: 5px; font-size: 11px; letter-spacing: 5px; }
       .meta-row { padding: 4px 16px; }
       .section { padding: 8px 16px; }
@@ -223,6 +241,7 @@ function buildReceiptHTML({ donation, templeConfig, logoDataUrl }) {
   <div class="card">
     <div class="top-stripe"></div>
     <div class="header">
+      <div class="header-spacer"></div>
       <div class="header-text">
         <div class="temple-name">${(tc.name || 'Temple').split('|').map(p => `<span class="name-line">${escHtml(p)}</span>`).join('')}</div>
         ${addressLine ? `<div class="header-sub">${escHtml(addressLine)}${escHtml(pincode)}</div>` : ''}
@@ -230,7 +249,7 @@ function buildReceiptHTML({ donation, templeConfig, logoDataUrl }) {
         ${regPanLine ? `<div class="header-ids">${regPanLine}</div>` : ''}
         ${exemptionLine ? `<div class="header-ids">${exemptionLine}</div>` : ''}
       </div>
-      ${logoTag ? `<div class="logo-box">${logoTag}</div>` : ''}
+      ${logoTag ? `<div class="logo-box">${logoTag}</div>` : '<div class="header-spacer"></div>'}
     </div>
 
     <div class="receipt-banner">RECEIPT</div>
