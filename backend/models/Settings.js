@@ -38,6 +38,7 @@ const settingsSchema = new mongoose.Schema({
       apiKey: String,        // Meta Access Token (Bearer)
       phoneNumberId: String,
       businessAccountId: String,
+      languageCode: { type: String, default: 'en' },
       templateNames: {
         donationCash: { type: String, default: 'donation_thankyou_cash' },
         donationUpi: { type: String, default: 'donation_thankyou_upi' },

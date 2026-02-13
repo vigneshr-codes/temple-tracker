@@ -40,7 +40,7 @@ const sendWhatsApp = async (to, templateName, variables, config) => {
     type: 'template',
     template: {
       name: templateName,
-      language: { code: 'en_US' },
+      language: { code: config.languageCode || 'en' },
       // Only include components if the template has variables (hello_world has none)
       ...(parameters.length > 0 && {
         components: [{ type: 'body', parameters }]

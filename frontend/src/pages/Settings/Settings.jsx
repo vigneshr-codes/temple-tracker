@@ -656,7 +656,7 @@ const NotificationsTab = ({ settings, updateSettings, testNotification, saving, 
 
   const [formData, setFormData] = useState({
     enableWhatsApp: false, enableSMS: false, enableEmail: false,
-    whatsAppConfig: { apiKey: '', phoneNumberId: '', businessAccountId: '' },
+    whatsAppConfig: { apiKey: '', phoneNumberId: '', businessAccountId: '', languageCode: 'en' },
     smsConfig: { provider: 'msg91', apiKey: '', senderId: '', dltTemplateIds: { donationCash: '', donationUpi: '', donationInkind: '', inventoryUsed: '', expiryAlert: '', eventReminder: '' } },
     emailConfig: { host: '', port: 587, username: '', password: '', fromEmail: '', fromName: '' },
     templates: {
@@ -687,7 +687,7 @@ const NotificationsTab = ({ settings, updateSettings, testNotification, saving, 
         enableWhatsApp: n.enableWhatsApp ?? false,
         enableSMS: n.enableSMS ?? false,
         enableEmail: n.enableEmail ?? false,
-        whatsAppConfig: { apiKey: n.whatsAppConfig?.apiKey || '', phoneNumberId: n.whatsAppConfig?.phoneNumberId || '', businessAccountId: n.whatsAppConfig?.businessAccountId || '' },
+        whatsAppConfig: { apiKey: n.whatsAppConfig?.apiKey || '', phoneNumberId: n.whatsAppConfig?.phoneNumberId || '', businessAccountId: n.whatsAppConfig?.businessAccountId || '', languageCode: n.whatsAppConfig?.languageCode || 'en' },
         smsConfig: {
           provider: 'msg91',
           apiKey: n.smsConfig?.apiKey || '',
@@ -778,6 +778,11 @@ const NotificationsTab = ({ settings, updateSettings, testNotification, saving, 
                 <div>
                   <label className={lCls}>Business Account ID</label>
                   <input type="text" className={iCls} value={formData.whatsAppConfig.businessAccountId} onChange={e => set('whatsAppConfig.businessAccountId', e.target.value)} placeholder="WhatsApp Business Account ID" />
+                </div>
+                <div>
+                  <label className={lCls}>Template Language Code</label>
+                  <input type="text" className={iCls} value={formData.whatsAppConfig.languageCode} onChange={e => set('whatsAppConfig.languageCode', e.target.value)} placeholder="e.g. en, en_US, ta" />
+                  <p className="mt-1 text-xs text-gray-400">Must match the language used when creating the template in Meta (e.g. <code>en</code>, <code>en_US</code>)</p>
                 </div>
               </div>
             )}
